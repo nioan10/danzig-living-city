@@ -1,0 +1,13 @@
+node_modules/
+*.log
+*-output.log
+*-error.log
+preview-*.png
+.reports/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+Thumbs.db

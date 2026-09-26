@@ -1,0 +1,19 @@
+main{height:auto;min-height:calc(100dvh - 110px)}
+.city-view{grid-template-rows:auto auto auto auto auto;align-content:start}
+.map-workspace{min-width:0;border:1px solid #9f9f754d;border-radius:7px;overflow:hidden;background:#1c3027}
+.map-navigation{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#20372e;font-size:10px}
+.map-navigation label{display:flex;align-items:center;gap:7px;color:#b6c6b0}
+.map-navigation select{border:1px solid #66775b;background:#2e4639;color:#f1e7c9;border-radius:3px;padding:6px;font:11px 'Segoe UI';max-width:180px;min-width:0}
+.map-navigation .map-find{flex:1}.map-find select{width:100%;max-width:210px}
+.map-navigation button{padding:7px 9px;background:#304b3b;color:#e2ddbe;border:1px solid #697b5e;border-radius:4px;font-size:10px;cursor:pointer}
+.map-shell{width:100%;height:auto;aspect-ratio:1.4545;min-height:400px;max-height:none;border:0;border-radius:0;background:#e7dfc3}
+.map-shell canvas{width:100%;height:100%;display:block}
+.map-caption{display:none}
+.map-bottom{font-size:9px;pointer-events:none}.map-bottom i{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 4px 0 9px}
+.map-bottom #map-status{display:none}
+.map-expanded .map-workspace{position:fixed;inset:12px;z-index:30;display:flex;flex-direction:column;box-shadow:0 0 0 25px #13251fd9}
+.map-expanded .map-shell{flex:1;min-height:0;aspect-ratio:auto}
+.map-expanded .map-navigation{flex-shrink:0}
+.land-options{display:flex;gap:7px;flex-wrap:wrap;margin:18px 0}.land-options span{padding:6px 9px;background:#e3e8d5;border:1px solid #b8c6a4;border-radius:3px;font-size:11px}
+#map-build-form{display:grid;gap:12px}#map-build-form label{display:grid;gap:8px;font-size:12px}#map-build-form select{background:#faf6e9;border:1px solid #bcc7a5;padding:10px;color:#38503a}
+@media(max-width:850px){.city-view{grid-template-rows:auto auto auto auto auto}.map-shell{height:auto;min-height:350px;aspect-ratio:1.2}.map-navigation{gap:8px}.map-find{min-width:150px}.map-navigation select{max-width:150px}.map-bottom{font-size:8px;line-height:1.8}}

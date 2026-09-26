@@ -1,0 +1,63 @@
+(function(root){
+  'use strict';
+  const Report=typeof module!=='undefined'&&module.exports?require('./report.js'):root.DanzigReport;
+  const clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),round=x=>Math.round(x*100)/100;
+  const CRISES=[{id:'mobilization',title:'Мобилизация',icon:'⚔',description:'Часть здоровых взрослых покинет город на заданный срок.',days:6},{id:'blockade',title:'Торговая блокада',icon:'⚓',description:'Внешний импорт и экспорт остановятся на три дня.',days:3},{id:'badHarvest',title:'Неурожай',icon:'♧',description:'Поля и пастбища будут давать на 65% меньше продукции шесть дней.',days:6}];
+  function ensure(s){
+    s.region??={period:6,base:20,perResident:.5,nextDay:s.day+6,debt:0,totalPaid:0,totalAssessed:0,history:[]};
+    s.customEvents??=[];s.customSerial??=0;
+    s.accounts??={sinceDay:s.day,days:[]};
+    s.statistics??={sinceDay:s.day,snapshots:[],trips:0,distance:0,production:{},consumption:{},lastSample:-1};
+  }
+  function money(s,amount,category){ensure(s);if(!Number.isFinite(amount))throw Error('Некорректная сумма');const actual=amount<0?-Math.min(s.treasury,-amount):amount;s.treasury=Math.max(0,s.treasury+actual);if(!actual)return 0;Report.money(s,actual,category);let day=s.accounts.days.find(x=>x.day===s.day);if(!day){day={day:s.day,income:{},expenses:{}};s.accounts.days.push(day);s.accounts.days=s.accounts.days.slice(-60);}const bucket=actual<0?day.expenses:day.income;bucket[category]=(bucket[category]||0)+Math.abs(actual);return Math.abs(actual);}
+  function active(s,type){return(s.incidents||[]).find(e=>e.type===type&&e.status==='active');}
+  function productionFactor(s,b){let factor=active(s,'badHarvest')&&['farm','pasture'].includes(b.type)?.35:1;for(const e of s.incidents||[])if(e.type==='custom'&&e.status==='active'&&(e.scope==='city'||e.targetId===b.id))factor*=e.productivity/100;return clamp(factor,0,4);}
+  function closed(s,b){return(s.incidents||[]).some(e=>e.type==='custom'&&e.status==='active'&&e.close&&e.targetId===b.id);}
+  function regionalBill(s){ensure(s);return round(s.region.base+s.alive.length*s.region.perResident);}
+  function collect(s,manual=false){ensure(s);const r=s.region,assessed=manual?0:regionalBill(s);r.debt=round(r.debt+assessed);r.totalAssessed=round(r.totalAssessed+assessed);const owed=r.debt,installment=manual?owed:assessed+Math.min(owed-assessed,Math.max(assessed*.5,s.treasury-assessed-100)),paid=money(s,-installment,'region');r.debt=round(Math.max(0,owed-paid));r.totalPaid=round(r.totalPaid+paid);r.history.unshift({day:s.day,assessed,owed,paid:round(paid),debt:r.debt,manual});r.history=r.history.slice(0,30);s.log(`Региону перечислено ${paid.toFixed(1)} тал.${r.debt?' Осталась задолженность: '+r.debt.toFixed(1)+' тал.':' Обязательства исполнены.'}`,'tribute',null,{title:manual?'Погашение задолженности':'Регулярный сбор в пользу региона',importance:r.debt?'critical':'major',buildingId:'hall'});return{ok:true,message:'Перечислено '+paid.toFixed(1)+' тал. Остаток долга: '+r.debt.toFixed(1)};}
+  function configureRegion(s,v){ensure(s);const period=Number(v.period),base=Number(v.base),perResident=Number(v.perResident);if(!Number.isInteger(period)||period<1||period>30||!Number.isFinite(base)||base<0||base>1000||!Number.isFinite(perResident)||perResident<0||perResident>20)return{ok:false,message:'Проверьте условия сбора'};Object.assign(s.region,{period,base,perResident});return{ok:true,message:'Условия обновлены. Дата ближайшего сбора сохранена.'};}
+  function incident(s,type,title,targetId,duration,extra={}){const e={id:++s.incidentSerial,type,title,targetId,startedAt:s.now,until:s.now+duration,status:'active',reactions:[],affected:[],effects:[],...extra};s.incidents.unshift(e);s.incidents=s.incidents.filter((e,i)=>e.status==='active'||i<100&&s.now-(e.endedAt||e.until)<1440*30);return e;}
+  function replan(s,e){for(const p of s.alive){if(p.absence)continue;const old=p.plan?.goal+'|'+p.plan?.steps[p.plan.index]?.target;p.plan=null;s.decide(p);if(p.plan&&old!==p.plan.goal+'|'+p.plan.steps[p.plan.index]?.target)e.reactions.push({personId:p.id,name:p.name,title:p.plan.title,goal:p.plan.goal});}}
+  function startCrisis(s,type,options={}){
+    ensure(s);const spec=CRISES.find(e=>e.id===type);if(!spec)return{ok:false,message:'Неизвестный кризис'};if(active(s,type))return{ok:false,message:'Кризис уже действует'};
+    const percent=Number(options.percent??25),days=Number(options.days??spec.days);if(!Number.isFinite(percent)||percent<5||percent>60||!Number.isFinite(days)||days<1||days>30)return{ok:false,message:'Доля 5–60%, срок 1–30 дней'};
+    const eligible=s.alive.filter(p=>p.age>=18&&p.age<=50&&!p.sick&&p.health>50&&!p.absence&&p.id!==s.mayorId);
+    if(type==='mobilization'&&!eligible.length)return{ok:false,message:'Нет подходящих жителей для призыва'};
+    for(const p of s.alive)if(!p.plan&&!p.absence)s.decide(p);
+    const e=incident(s,type,spec.title,type==='blockade'?'dock':type==='badHarvest'?'farm':'hall',days*1440);
+    if(type==='mobilization'){
+      const count=Math.max(1,Math.ceil(eligible.length*percent/100));
+      for(let i=0;i<count;i++){const p=s.pick(eligible);eligible.splice(eligible.indexOf(p),1);const oldJob=p.jobId,oldRole=p.role;
+        if(p.cargo){const at=s.building(p.cargo.from)||s.building(p.cargo.to);at.stock[p.cargo.good]+=p.cargo.amount;p.cargo=null;}
+        for(const[g,n]of Object.entries(p.bag)){s.building(p.homeId).stock[g]+=n;p.bag[g]=0;}
+        p.absence={type:'army',status:'departing',incidentId:e.id,returnAt:e.until,oldJob,oldRole};p.jobId=null;p.role='Призван в армию';p.plan=null;p.location=null;
+        const next=p.path[0],route=s.routeBetween(next?.id||p.navNode,'southRoad');p.path=next?[{...next},...route]:route;p.action='Уходит к южным воротам';p.reason='Пришёл приказ о мобилизации. Служба продлится '+days+' дней.';
+        e.affected.push(p.id);e.reactions.push({personId:p.id,name:p.name,title:'Уходит на службу через южные ворота',goal:'mobilization'});s.remember(p,'service',e.id,p.reason);
+        for(const q of s.alive.filter(q=>q.homeId===p.homeId&&q.id!==p.id))q.mood=clamp(q.mood-12,0,100);
+      }
+      e.effects=[`Призвано: ${e.affected.length}`,`Срок: ${days} дн.`,'Рабочие места освобождены'];s.assignJobs();
+    }else e.effects=type==='blockade'?['Импорт и экспорт остановлены',`Срок: ${days} дн.`]:['Выработка полей и пастбищ −65%',`Срок: ${days} дн.`];
+    s.log(type==='mobilization'?`Регион призвал ${e.affected.length} жителей. Они идут к южным воротам; семьи и мастерские остаются без их труда.`:spec.description,'crisis',null,{title:spec.title,importance:'critical',incidentId:e.id,buildingId:e.targetId,effects:e.effects});replan(s,e);return{ok:true,incident:e,message:spec.title+' началась'};
+  }
+  function serviceStep(s,p,dt){const a=p.absence;if(!a||a.status==='away')return;s.move(p,dt);if(p.path.length)return;if(a.status==='departing'&&p.navNode==='southRoad'){a.status='away';p.action='На службе за пределами города';p.motionSegments=[];s.log(p.name+' вышел за южные ворота и отправился на службу.','military',p.id,{title:'Житель покинул город',importance:'minor'});}else if(a.status==='returning'&&p.navNode==='b:'+p.homeId){const oldJob=s.building(a.oldJob);p.absence=null;p.role='Ищет ремесло';p.goal=p.homeId;p.location=p.homeId;p.plan=null;if(oldJob&&s.workers(oldJob.id).length<s.jobSlots(oldJob)){p.jobId=oldJob.id;p.role=a.oldRole;}p.energy=Math.max(35,p.energy-15);s.assignJobs();s.log(p.name+' вернулся со службы домой.','military',p.id,{title:'Возвращение в город',importance:'major'});}}
+  function normalizeCustom(s,v){const title=String(v.title||'').trim().slice(0,70),description=String(v.description||'').trim().slice(0,400),target=String(v.target||'city'),duration=Number(v.hours)*60,repeatDays=Number(v.repeatDays||0),treasury=Number(v.treasury||0),mood=Number(v.mood||0),stock=Number(v.stock||0),productivity=Number(v.productivity??100),good=String(v.good||'bread');
+    if(!title||target!=='city'&&!s.building(target)||!Object.hasOwn(s.building('market').stock,good)||![duration,repeatDays,treasury,mood,stock,productivity].every(Number.isFinite)||duration<60||duration>43200||!Number.isInteger(repeatDays)||repeatDays<0||repeatDays>30||Math.abs(treasury)>5000||Math.abs(mood)>50||Math.abs(stock)>1000||productivity<0||productivity>200||v.close&&target==='city')return null;
+    return{title,description,target,duration,repeatDays,treasury,mood,stock,productivity,good,close:!!v.close};}
+  function saveCustom(s,v){ensure(s);const data=normalizeCustom(s,v);if(!data)return{ok:false,message:'Проверьте название, место и числовые значения события'};if(s.customEvents.length>=20)return{ok:false,message:'Можно хранить до 20 шаблонов'};const t={id:++s.customSerial,...data,nextAt:null,enabled:false,runs:0};s.customEvents.push(t);return{ok:true,template:t,message:'Шаблон сохранён'};}
+  function runCustom(s,id,scheduled=false){ensure(s);const t=s.customEvents.find(t=>t.id===Number(id));if(!t)return{ok:false,message:'Шаблон не найден'};if(s.incidents.some(e=>e.type==='custom'&&e.templateId===t.id&&e.status==='active'))return{ok:false,message:'Это событие уже действует'};const b=s.building(t.target==='city'?'market':t.target),people=t.target==='city'?s.alive:s.alive.filter(p=>p.homeId===t.target||p.jobId===t.target||p.location===t.target);
+    const e=incident(s,'custom',t.title,b.id,t.duration,{templateId:t.id,scope:t.target==='city'?'city':'building',productivity:t.productivity,close:t.close});
+    const cash=money(s,t.treasury,'custom')*(t.treasury<0?-1:1),stock=Math.max(-b.stock[t.good],t.stock);b.stock[t.good]+=stock;
+    for(const p of people){p.mood=clamp(p.mood+t.mood,0,100);p.eventMood??=[];if(t.mood)p.eventMood.push({incidentId:e.id,value:t.mood,until:e.until});}
+    e.effects=[...(cash?[`Казна: ${cash>0?'+':''}${cash.toFixed(1)}`]:[]),...(stock?[`${s.goodName(t.good)}: ${stock>0?'+':''}${round(stock)}`]:[]),...(t.mood?[`Настроение: ${t.mood>0?'+':''}${t.mood}; затронуто ${people.length}`]:[]),...(t.productivity!==100?[`Производство: ${t.productivity}%`]:[]),...(t.close?['Двор закрыт']:[])];
+    s.log(t.description||'Произошло заданное вами событие.','custom',null,{title:t.title,importance:'major',incidentId:e.id,buildingId:b.id,effects:e.effects});
+    if(stock)for(const p of s.alive)s.observe(p,b);replan(s,e);t.runs++;if(t.repeatDays){t.enabled=true;t.nextAt=s.now+t.repeatDays*1440;}return{ok:true,incident:e,message:(scheduled?'Повтор: ':'')+t.title};
+  }
+  function daily(s){ensure(s);while(s.day>=s.region.nextDay){collect(s);s.region.nextDay+=s.region.period;}}
+  function tick(s){ensure(s);
+    for(const p of s.living){if(p.absence?.status==='away'&&s.now>=p.absence.returnAt){p.absence.status='returning';p.role='Возвращается со службы';p.action='Возвращается домой';p.goal=p.homeId;p.path=s.routeBetween('southRoad','b:'+p.homeId);p.location=null;s.log(p.name+' возвращается со службы по южной дороге.','military',p.id,{importance:'minor'});}}
+    for(const e of s.incidents.filter(e=>e.status==='active'&&['custom',...CRISES.map(c=>c.id)].includes(e.type))){if(s.now<e.until)continue;if(e.type==='mobilization'&&e.affected.some(id=>s.person(id)?.alive&&s.person(id)?.absence))continue;e.status='resolved';e.endedAt=s.now;s.log(e.type==='mobilization'?'Призванные жители вернулись. Они вновь могут участвовать в городской жизни.':e.type==='blockade'?'Торговые пути открылись. Импорт и экспорт возобновлены.':e.type==='badHarvest'?'Последствия неурожая закончились. Выработка хозяйств восстановилась.':'Временные эффекты события закончились. Переданные товары и деньги остаются у получателей.','crisis',null,{title:e.title+' · завершено',importance:'major',incidentId:e.id,buildingId:e.targetId});replan(s,e);}
+    for(const t of s.customEvents)if(t.enabled&&t.nextAt!==null&&s.now>=t.nextAt){const r=runCustom(s,t.id,true);if(!r.ok)t.nextAt+=t.repeatDays*1440;}
+    const sample=Math.floor(s.now/360);if(sample!==s.statistics.lastSample){s.statistics.lastSample=sample;const g=s.goods;s.statistics.snapshots.push({at:s.now,population:s.alive.length,total:s.living.length,away:s.living.filter(p=>p.absence?.status==='away').length,treasury:round(s.treasury),food:s.food,happiness:s.happiness,debt:s.region.debt,goods:Object.fromEntries(Object.entries(g).map(([k,v])=>[k,round(v)]))});s.statistics.snapshots=s.statistics.snapshots.slice(-240);}
+  }
+  const api={CRISES,ensure,money,active,productionFactor,closed,regionalBill,collect,configureRegion,startCrisis,serviceStep,saveCustom,runCustom,daily,tick};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.DanzigSystems=api;
+})(typeof window!=='undefined'?window:globalThis);

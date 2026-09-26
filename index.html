@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#172b29">
+  <title>Данциг · Живой город</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="atlas.css">
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="statistics.css">
+  <link rel="stylesheet" href="report.css">
+  <link rel="stylesheet" href="guilds.css">
+  <link rel="stylesheet" href="development.css">
+<link rel="stylesheet" href="map-plan.css">
+  <link rel="stylesheet" href="mind.css">
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="./" aria-label="Данциг, живой город"><span class="crest">D</span><span><strong>ДАНЦИГ</strong><small>ХРОНИКИ ЖИВОГО ГОРОДА</small></span></a>
+    <div class="date-block"><span id="season">ВЕСНА · 1450</span><div><span id="date">1 марта</span><span class="date-dot">·</span><b id="time">06:00</b><span id="weather">Ясно</span></div></div>
+    <div class="header-actions"><span class="live-label"><i></i> ГОРОД ЖИВЁТ</span><button class="quiet" id="finish-simulation">Завершить</button><button class="quiet" id="open-stats">Статистика</button><button class="quiet" id="help" aria-label="Как устроена симуляция">?</button><button class="quiet" id="save">Сохранить</button></div>
+  </header>
+  <main>
+    <section class="city-view" aria-label="Карта города">
+      <div class="city-heading"><div><span class="eyebrow">ВОЛЬНЫЙ ГОРОД НА БАЛТИКЕ</span><h1>Данциг. Живая история.</h1></div><span class="prototype">АТЛАС ГОРОДА / 0.5</span></div>
+      <div class="stats" aria-label="Показатели города">
+        <div><span class="stat-icon">♟</span><span><b id="population">48</b><small>жителей</small></span></div>
+        <div><span class="stat-icon">◈</span><span><b id="treasury">320</b><small>талеров в казне</small></span></div>
+        <div><span class="stat-icon">♧</span><span><b id="food">180</b><small>порций еды</small></span></div>
+        <div><span class="stat-icon">☀</span><span><b id="happiness">74%</b><small>благополучие</small></span></div>
+      </div>
+      <div class="map-workspace">
+        <div class="map-navigation"><label>Слой <select id="map-layer"><option value="all">Весь город</option><option value="production">Мастерские</option><option value="home">Жильё</option><option value="public">Общественные места</option><option value="land">Свободная земля</option></select></label><label class="map-find">Найти <select id="map-find" aria-label="Найти объект на карте"></select></label><button id="map-mode" aria-pressed="false">Иллюстрация</button><button id="map-wide" aria-pressed="false">Развернуть карту</button></div>
+      <div class="map-shell">
+        <canvas id="map" role="img" aria-label="Данциг с предместьями: поля за стеной, дороги через ворота и порт у реки. Жители перемещаются по улицам. Выбрать жителя или здание можно на карте или в списках справа."></canvas>
+        <div class="map-caption" aria-hidden="true"><span class="compass">N<br>↑</span><span>ДАНЦИГ<br><small>Город и предместья · 1450</small></span></div>
+        <div class="map-tools"><button id="labels" aria-pressed="true" title="Подписи зданий">Aa</button><button id="land-toggle" aria-pressed="true" aria-label="Свободные участки">＋</button><button id="routes" aria-pressed="false" title="Показать дороги" aria-label="Показать дороги">⌁</button><button id="zoom-in" aria-label="Приблизить">+</button><button id="zoom-out" aria-label="Отдалить">−</button><button id="center" aria-label="Показать весь город">⌖</button></div>
+        <div id="map-tooltip" class="map-tooltip" hidden></div>
+        <div class="map-bottom"><span><i style="background:#ad663f"></i>Мастерские <i style="background:#617a91"></i>Дома <i style="background:#76668b"></i>Общественные <i style="background:#4f8463"></i>＋ Свободная земля</span><span id="map-status">Город просыпается</span></div>
+      </div>
+      </div>
+      <div class="time-controls"><div class="playback"><button id="pause" aria-label="Приостановить симуляцию">Ⅱ</button><div class="speeds" aria-label="Скорость времени"><button data-speed="1" class="active" aria-pressed="true">1×</button><button data-speed="3" aria-pressed="false">3×</button><button data-speed="10" aria-pressed="false">10×</button><button data-speed="30" aria-pressed="false">30×</button><button data-speed="100" aria-pressed="false">100×</button><button data-speed="300" aria-pressed="false">300×</button><button data-speed="1000" aria-pressed="false">1000×</button><button data-speed="3000" aria-pressed="false">3000×</button></div><small id="actual-speed" title="Фактическое ускорение зависит от компьютера"></small><span id="day-count">День 1</span></div><button id="next-day" class="text-button">До следующего утра <span>↗</span></button></div>
+      <div class="ticker"><span>ГОРОДСКИЕ ВЕСТИ</span><p id="latest-event">На рыночной площади начинают собираться торговцы.</p><button id="open-log" aria-label="Открыть хронику">↗</button></div>
+      <section class="director" aria-label="Управление событиями">
+        <div class="director-heading"><div><span class="eyebrow">ВАШЕ ВЛИЯНИЕ</span><h2>Изменить ход истории</h2></div><button id="open-event-lab" class="lab-launch">Кризисы и свои события ↗</button><label>Место пожара <select id="event-target" aria-label="Место пожара"></select></label></div>
+        <div id="event-controls" class="event-controls"></div>
+        <div class="director-bottom"><span id="event-response" role="status">Выберите событие. Жители сразу пересмотрят планы.</span><button id="observe-event">Наблюдать 30 минут <span>↗</span></button></div>
+      </section>
+    </section>
+    <aside class="sidebar">
+      <nav class="tabs" aria-label="Обозрение города"><button data-tab="summary" class="active" aria-pressed="true">Сводка</button><button data-tab="people" aria-pressed="false">Жители</button><button data-tab="buildings" aria-pressed="false">Здания</button><button data-tab="city" aria-pressed="false">Совет</button><button data-tab="log" aria-pressed="false">Хроника</button></nav>
+      <button id="feed-update" class="feed-update" hidden>Лента обновляется</button>
+      <div id="panel" tabindex="0" aria-label="Содержимое боковой панели"></div>
+    </aside>
+  </main>
+  <footer><span>ДАНЦИГ <i>1450</i><span class="footer-separator">/</span>Маленький город. Большая жизнь.</span><div><span id="save-status">Автосохранение включено</span><button id="reset" class="text-button">Новая история</button></div></footer>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <dialog id="finish-dialog" aria-labelledby="finish-title"><span class="eyebrow">ПОСЛЕДНЯЯ СТРАНИЦА</span><h2 id="finish-title">Завершить эту главу?</h2><p>Время остановится. Мы сохраним город и соберём летопись: поколения, семьи, ремёсла, казну и памятные события. Из отчёта можно будет явно продолжить симуляцию.</p><div class="dialog-actions"><button class="quiet" data-close>Ещё понаблюдать</button><button class="primary" id="confirm-finish">Завершить и открыть отчёт</button></div></dialog>
+  <dialog id="report-dialog" aria-label="Итоги симуляции"></dialog>
+  <dialog id="global-dialog" class="global-dialog" aria-label="Глобальная статистика города"></dialog>
+  <dialog id="event-lab" class="global-dialog" aria-label="Кризисы и свои события"></dialog>
+  <dialog id="help-dialog"><button class="dialog-close" data-close aria-label="Закрыть">×</button><span class="eyebrow">ДОБРО ПОЖАЛОВАТЬ В ДАНЦИГ</span><h2>Город живёт без указаний.</h2><p>Наблюдайте за жителями и вмешивайтесь, когда сочтёте нужным. Нажмите на человека или здание на карте либо выберите их в списке. На карте 34 интерактивных двора; окружающая застройка служит художественным фоном. Кнопки под картой вызывают события, а вкладка «Сводка» показывает новости и реакцию жителей.</p><div class="help-grid"><div><b>Работа и повседневность</b><p>Жители сравнивают цели, строят планы и запоминают удачи и неудачи. Посмотрите «Планы и память» в карточке человека. Срочные потребности могут прервать текущий план.</p></div><div><b>Экономика и власть</b><p>Хлеб, одежда, мебель, посуда и инструменты производятся в отдельных мастерских. Сырьё нужно купить и доставить по дорогам через ворота. Налог пополняет казну, но снижает довольство. Каждые 12 дней горожане выбирают бургомистра.</p></div><div><b>Смена поколений</b><p>24 дня = один год, 6 дней = сезон. Жители взрослеют, заводят семьи, рожают детей и умирают. Дети перенимают опыт родителей, затем учатся на своих решениях. День занимает около 80 секунд на скорости 1×; доступны скорости до 300×.</p></div><div><b>Ваше влияние</b><p>Под картой можно вызвать пожар, обоз, ярмарку, грозу, болезнь или поломку мельницы. Выберите место пожара из списка. Планы меняются сразу; кнопка «Наблюдать 30 минут» покажет развитие событий. В «Совете» можно изменить налог, купить еду и помочь после пожара. В «Кризисах и своих событиях» — мобилизация, блокада, неурожай и редактор. «Статистика» открывает общую книгу города и условия регулярных сборов региону. Пробел — пауза; 1–8 — скорости от 1× до 3000×.</p></div></div><p class="muted">Это условный город, вдохновлённый The Guild 2. Экономика и демография намеренно упрощены: динамические цены, ускоренное время и упрощённый спрос на бытовые товары. Все решения жителей рассчитываются локально; нейросеть не подключена. Игра хранится в этом браузере.</p><button class="primary" data-close>Пусть город живёт</button></dialog>
+  <dialog id="reset-dialog"><h2>Начать новую историю?</h2><p>Текущий город и его сохранение будут заменены новым. Начальные условия останутся прежними.</p><div class="dialog-actions"><button class="quiet" data-close>Оставить город</button><button class="primary" id="confirm-reset">Начать заново</button></div></dialog>
+  <script src="world.js"></script><script src="decision-bridge.js"></script><script src="events.js"></script><script src="report.js"></script><script src="city-systems.js"></script><script src="intentions.js"></script><script src="citizen-mind.js"></script><script src="social-life.js"></script><script src="agreements.js"></script><script src="labour.js"></script><script src="citizen-planner.js"></script><script src="learning.js"></script><script src="enterprise-policy.js"></script><script src="brain.js"></script><script src="housing.js"></script><script src="property-tax.js"></script><script src="city-budget.js"></script><script src="finance.js"></script><script src="commerce.js"></script><script src="expansion.js"></script><script src="guilds.js"></script><script src="guild-view.js"></script><script src="development.js"></script><script src="government.js"></script><script src="development-view.js"></script><script src="analytics.js"></script><script src="sim.js"></script><script src="map-art.js"></script><script src="map-plan.js"></script><script src="map-painted.js"></script><script src="finance-view.js"></script><script src="society-view.js"></script><script src="mind-view.js"></script><script src="statistics-view.js"></script><script src="dashboard.js"></script><script src="report-view.js"></script><script src="app.js"></script>
+</body>
+</html>

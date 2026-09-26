@@ -1,0 +1,20 @@
+{
+  "name": "danzig-living-city",
+  "version": "0.11.0",
+  "private": true,
+  "description": "Наблюдаемая симуляция средневекового города без зависимостей",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node tools/check.cjs syntax",
+    "test": "node tools/check.cjs full",
+    "test:quick": "node tools/check.cjs quick",
+    "test:long": "node tools/check.cjs long",
+    "test:economy": "node tools/check.cjs economy",
+    "test:events": "node tools/check.cjs events",
+    "test:systems": "node tools/check.cjs systems",
+    "test:tooling": "node tools/check.cjs tooling"
+  }
+}

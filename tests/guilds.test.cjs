@@ -1,0 +1,60 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const {Simulation,Guilds,Expansion,Brain,World,Finance}=require('../sim.js');
+const clone=s=>Simulation.fromJSON(JSON.parse(JSON.stringify(s)));
+const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-6,`${a} != ${b}`);
+const wealth=s=>s.treasury+s.people.reduce((n,p)=>n+p.coins,0)+s.buildings.reduce((n,b)=>n+b.cash+(b.construction?.capital||0),0)+s.guilds.groups.reduce((n,g)=>n+g.cash,0);
+function establish(s,building='bakery'){const b=s.building(building),p=s.person(b.ownerId);p.tradeExperience={[b.type]:240};p.coins=180;const kin=Guilds.family(s,p).filter(q=>q.alive&&q.age>=16);for(const q of kin)q.coins=150;const before=wealth(s);assert.ok(Guilds.found(s,p).ok);close(wealth(s),before);return Guilds.owner(s,b);}
+function approve(s,p,wish=p.enterpriseWish){const result=Guilds.commission(s,p,wish);return result.ok?s.decidePermit(result.applicationId,true):result;}
+function project(){const s=new Simulation();s.day=1;s.minute=600;for(const b of s.buildings)b.stock.bread=0;s.commerce.stock.bread=0;for(const p of s.people.filter(p=>['market','clinic'].includes(p.jobId)))p.jobId=null;const g=establish(s);s.day=2;g.cash=1000;Guilds.review(s);const p=s.person(g.leaderId);p.traits.push('Амбициозный');Object.assign(p,{hunger:100,energy:100,social:100,faith:100,health:100,sick:false,coins:60});s.building(p.homeId).stock.fish=12;return{s,g,p};}
+
+test('новый город начинается без гильдий: мастерские принадлежат отдельным мастерам',()=>{const s=new Simulation();assert.equal(s.guilds.groups.length,0);assert.ok(s.buildings.filter(b=>s.productionRecipe(b)).every(b=>!b.guildId));assert.ok(s.building('bakery').ownerId);});
+test('семья учреждает гильдию через обычное решение и поход в ратушу',()=>{const s=new Simulation(),p=s.person(s.building('bakery').ownerId);p.tradeExperience={bakery:240};p.coins=250;Guilds.review(s);assert.ok(p.enterpriseWish.founding);Object.assign(p,{hunger:100,energy:100,social:100,faith:100,health:100,sick:false});s.building(p.homeId).stock.fish=12;assert.equal(Brain.choose(s,p).steps[0].kind,'charter');s.advance(400);assert.equal(s.guilds.groups.length,1);assert.equal(s.guilds.groups[0].trade,'bakery');});
+test('не нанимает в семью посторонних; совпадение фамилии не означает родство',()=>{const s=new Simulation(),g=establish(s),outsider=s.people.find(p=>p.age>=16&&!g.members.includes(p.id));outsider.surname=g.familyName;outsider.jobId='bakery';Guilds.review(s);assert.equal(outsider.guildId,undefined);assert.ok(!g.members.includes(outsider.id));assert.equal(Guilds.assess(s,g,'smith'),null);});
+test('живой глава выбирает предприятие и оформляет его обычными тиками',()=>{
+ const {s,g,p}=project();assert.equal(g.proposal.type,'bakery');assert.equal(Brain.choose(s,p).goal,'enterprise');s.advance(400);assert.ok(!s.buildings.some(b=>b.construction));const application=s.guilds.applications.find(a=>a.status==='pending');assert.ok(application);assert.ok(s.decidePermit(application.id,true).ok);const b=s.buildings.find(b=>b.construction);assert.ok(b);assert.equal(b.guildId,g.id);assert.equal(b.ownerId,p.id);assert.equal(s.guilds.built,1);assert.equal(b.type,'bakery');assert.ok(s.events.some(e=>e.type==='guild'));
+});
+test('стройка оплачивается гильдией, разрешение попадает в казну, стартовый капитал зарезервирован',()=>{
+ const {s,g,p}=project(),before=wealth(s),treasury=s.treasury,cash=g.cash,proposal={...g.proposal};assert.ok(approve(s,p,{...p.enterpriseWish}).ok);const b=s.building(proposal.lotId);close(g.cash,cash-357);close(s.treasury,treasury+17);assert.equal(b.construction.capital,120);close(wealth(s),before-(340-120));assert.equal(s.accounts.days[0].expenses.construction,undefined);
+ const beforeOpen=wealth(s);s.day+=4;Expansion.tick(s);assert.equal(b.cash,120);close(wealth(s),beforeOpen);assert.equal(b.enterprise.openingCash,120);assert.ok(s.people.every(p=>p.knowledge[b.id]));assert.ok(World.route('b:market','b:'+b.id));
+});
+test('занятый участок не принимает второй проект и не списывает деньги',()=>{
+ const {s,g,p}=project(),wish={...p.enterpriseWish};assert.ok(s.startConstruction(wish.lotId,'home').ok);const before=wealth(s),cash=g.cash;assert.equal(Guilds.commission(s,p,wish).ok,false);assert.equal(g.cash,cash);close(wealth(s),before);assert.equal(s.guilds.built,0);
+});
+test('нет строительства без спроса, работников, резерва или во время блокады',()=>{
+ const {s,g,p}=project();const wish={...p.enterpriseWish};g.cash=400;assert.equal(Guilds.commission(s,p,wish).ok,false);g.cash=1000;s.building('market').stock.bread=10000;assert.equal(Guilds.assess(s,g,'bakery').viable,false);s.building('market').stock.bread=0;for(const q of s.alive.filter(q=>q.age>=16&&!q.jobId))q.jobId='hall';assert.equal(Guilds.assess(s,g,'bakery').viable,false);
+ const other=project();other.s.triggerCrisis('blockade');Guilds.review(other.s);assert.equal(other.g.proposal,null);assert.match(other.g.status,/Блокада/);
+});
+test('прибыль, взносы, поддержка и выплаты перераспределяют существующие деньги',()=>{
+ const s=new Simulation(),g=establish(s);s.day=6;const b=s.building('bakery');b.cash+=100;g.cash=1500;for(const p of Guilds.members(s,g))p.coins=200;const before=wealth(s);Guilds.daily(s);close(wealth(s),before);assert.equal(b.enterprise.lastProfit,100);close(b.enterprise.profitTax,8);assert.ok(g.invested>0);assert.ok(g.dividends>0);assert.ok(s.guilds.taxPaid>0);assert.ok(s.reportArchive.income.guildProfit>0);
+ const after=wealth(s);Guilds.daily(s);close(wealth(s),after);
+});
+test('убыток не облагается налогом на прибыль',()=>{
+ const s=new Simulation();s.day=1;const b=s.building('bakery');b.cash-=50;Guilds.daily(s);assert.equal(b.enterprise.lastProfit,-50);assert.equal(b.enterprise.profitTax,0);
+});
+test('соперники получают разные цены и предложения зарплаты',()=>{
+ const {s,g,p}=project();assert.ok(approve(s,p,p.enterpriseWish).ok);s.day+=4;Expansion.tick(s);const a=s.building('bakery'),b=s.buildings.find(b=>b.expansion&&b.type==='bakery');a.stock.bread=500;b.stock.bread=0;a.cash=b.cash=300;const oldWage=b.wage;Guilds.daily(s);assert.ok(s.price(a,'bread')<s.price(b,'bread'));assert.ok(b.wage>=oldWage);p.knowledge[a.id]={stock:{bread:20},seenAt:s.now};p.knowledge[b.id]={stock:{bread:20},seenAt:s.now};const offers=s.suppliers(p,'bread');assert.ok(offers.some(o=>o.id===a.id));assert.ok(offers.some(o=>o.id===b.id));
+});
+test('продажи гильдейского предприятия учитываются в его кассе и налогах',()=>{
+ const s=new Simulation(),b=s.building('bakery'),before=b.cash,t=s.treasury;const tax=Finance.sale(s,b,100);close(b.cash,before+100-tax);close(s.treasury,t+tax);close(b.enterprise.totalRevenue,100);close(b.enterprise.revenue,100);
+});
+test('две разные семьи могут конкурировать в одном ремесле',()=>{const {s,g}=project();s.treasury=1000;assert.ok(s.startConstruction('new1','bakery').ok);s.day+=4;Expansion.tick(s);const b=s.building('new1'),p=s.people.find(p=>p.alive&&p.age>=16&&!p.guildId);p.jobId=b.id;b.ownerId=p.id;const rival=establish(s,b.id);rival.cash=1000;const free=s.people.find(q=>q.alive&&q.age>=16&&q.age<65&&q.id!==p.id&&q.jobId!=='bakery'&&q.jobId!==b.id);free.jobId=null;s.day++;g.cash=0;for(const q of s.buildings)q.stock.bread=0;s.commerce.stock.bread=0;Guilds.review(s);assert.equal(rival.trade,g.trade);assert.equal(rival.proposal.type,'bakery');assert.ok(approve(s,s.person(rival.leaderId)).ok);assert.notEqual(s.building('bakery').guildId,rival.id);});
+test('проект и новая земля переживают сохранение без смены планов',()=>{
+ const {s,p}=project();p.plan=Brain.choose(s,p);const restored=clone(s);s.advance(400);restored.advance(400);assert.deepEqual(JSON.parse(JSON.stringify(s)),JSON.parse(JSON.stringify(restored)));const again=clone(s);assert.ok(again.guilds.applications.some(a=>a.status==='pending'));const a=again.guilds.applications[0];assert.ok(again.decidePermit(a.id,true).ok);assert.deepEqual(clone(again).toJSON(),again.toJSON());
+});
+test('смерть главы приводит к выбору живого преемника, деньги и активы остаются у гильдии',()=>{
+ const {s,g,p}=project(),cash=g.cash;s.die(p,'умер от болезни');Guilds.review(s);assert.notEqual(g.leaderId,p.id);assert.ok(s.person(g.leaderId).alive);assert.equal(g.cash,cash);assert.equal(s.building('bakery').guildId,g.id);
+});
+test('старый город получает владение без ретроспективных налогов и сброса',()=>{
+ const s=new Simulation(),data=JSON.parse(JSON.stringify(s));delete data.state.guilds;for(const b of data.state.buildings){delete b.guildId;delete b.enterprise;}for(const p of data.state.people)delete p.guildId;const r=Simulation.fromJSON(data);assert.equal(r.treasury,s.treasury);assert.equal(r.guilds.taxPaid,0);assert.equal(r.people.length,48);assert.equal(r.guilds.groups.reduce((n,g)=>n+g.cash,0),0);
+});
+test('правила гильдий валидируются, завершённый город не принимает проекты',()=>{
+ const {s}=project();assert.equal(s.setGuildPolicy({profitRate:30,permitRate:5,auto:true}).ok,false);assert.ok(s.setGuildPolicy({profitRate:0,permitRate:0,auto:false}).ok);assert.ok(s.guilds.groups.every(g=>!g.proposal));s.finish();assert.equal(s.setGuildPolicy({profitRate:8,permitRate:5,auto:true}).ok,false);assert.equal(s.guildCouncil().ok,false);assert.equal(s.conclusion.guilds.groups.length,1);
+});
+
+test('старая искусственная гильдия распускается с возвратом капитала и сохранением стройки',()=>{const {s,g,p}=project();assert.ok(approve(s,p).ok);const before=wealth(s),d=s.toJSON();delete d.state.guilds.version;const r=Simulation.fromJSON(JSON.parse(JSON.stringify(d)));assert.equal(r.guilds.groups.length,0);close(wealth(r),before);assert.ok(r.buildings.some(b=>b.construction));assert.ok(r.buildings.every(b=>!b.guildId));assert.deepEqual(clone(r).toJSON(),r.toJSON());});
+test('заявка не списывает деньги, отказ не строит, повторное решение невозможно',()=>{const {s,g,p}=project(),before=wealth(s);const result=Guilds.commission(s,p,p.enterpriseWish);assert.ok(result.queued);close(wealth(s),before);assert.ok(!s.buildings.some(b=>b.construction));assert.ok(s.decidePermit(result.applicationId,false).ok);assert.equal(s.decidePermit(result.applicationId,true).ok,false);close(wealth(s),before);});
+test('при выдаче разрешения повторно проверяются деньги и земля',()=>{const {s,g,p}=project();const result=Guilds.commission(s,p,p.enterpriseWish);g.cash=0;assert.equal(s.decidePermit(result.applicationId,true).ok,false);assert.ok(!s.buildings.some(b=>b.construction));});
+test('по умолчанию бургомистр рассматривает заявку на следующем утреннем заседании',()=>{const {s,g,p}=project();assert.equal(s.guilds.permitMode,'auto');Guilds.commission(s,p,p.enterpriseWish);assert.equal(s.guilds.applications[0].status,'pending');s.day++;Guilds.daily(s);assert.equal(s.guilds.applications[0].status,'approved');assert.ok(s.buildings.some(b=>b.guildId===g.id&&b.construction));});
+test('старый ручной режим переходит к бургомистру без изменения денег и заявок',()=>{const {s,p}=project();Guilds.commission(s,p,p.enterpriseWish);const data=JSON.parse(JSON.stringify(s));data.state.guilds.permitMode='manual';delete data.state.guilds.permitPolicyVersion;const restored=Simulation.fromJSON(data);assert.equal(restored.guilds.permitMode,'auto');close(wealth(restored),wealth(s));assert.deepEqual(restored.guilds.applications,s.guilds.applications);assert.deepEqual(clone(restored).toJSON(),restored.toJSON());});
+test('явное ручное вмешательство сохраняется и приостанавливает автоматическую выдачу',()=>{const {s,p}=project();Guilds.commission(s,p,p.enterpriseWish);assert.ok(s.setGuildPolicy({auto:true,profitRate:8,permitRate:5,permitMode:'manual'}).ok);const restored=clone(s);assert.equal(restored.guilds.permitMode,'manual');restored.day++;Guilds.daily(restored);assert.equal(restored.guilds.applications[0].status,'pending');assert.ok(!restored.buildings.some(b=>b.construction));});
+test('бургомистр не выдаёт автоматическое разрешение без средств на проект',()=>{const {s,g,p}=project();Guilds.commission(s,p,p.enterpriseWish);g.cash=0;Guilds.reviewPermits(s);assert.notEqual(s.guilds.applications[0].status,'approved');assert.ok(!s.buildings.some(b=>b.construction));});

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#172b29">
+  <title>Данциг · Живой город</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="./" aria-label="Данциг, живой город"><span class="crest">D</span><span><strong>ДАНЦИГ</strong><small>ХРОНИКИ ЖИВОГО ГОРОДА</small></span></a>
+    <div class="date-block"><span id="season">ВЕСНА · 1450</span><div><span id="date">1 марта</span><span class="date-dot">·</span><b id="time">06:00</b><span id="weather">Ясно</span></div></div>
+    <div class="header-actions"><span class="live-label"><i></i> ГОРОД ЖИВЁТ</span><button class="quiet" id="help" aria-label="Как устроена симуляция">?</button><button class="quiet" id="save">Сохранить</button></div>
+  </header>
+  <main>
+    <section class="city-view" aria-label="Карта города">
+      <div class="city-heading"><div><span class="eyebrow">ВОЛЬНЫЙ ГОРОД НА БАЛТИКЕ</span><h1>У каждого — своя история.</h1></div><span class="prototype">СИМУЛЯЦИЯ / 0.1</span></div>
+      <div class="stats" aria-label="Показатели города">
+        <div><span class="stat-icon">♟</span><span><b id="population">48</b><small>жителей</small></span></div>
+        <div><span class="stat-icon">◈</span><span><b id="treasury">320</b><small>талеров в казне</small></span></div>
+        <div><span class="stat-icon">♧</span><span><b id="food">180</b><small>порций еды</small></span></div>
+        <div><span class="stat-icon">☀</span><span><b id="happiness">74%</b><small>благополучие</small></span></div>
+      </div>
+      <div class="map-shell">
+        <canvas id="map" role="img" aria-label="Схематичная карта Данцига. Жители перемещаются по улицам. Выбрать жителя или здание можно на карте или в списках справа."></canvas>
+        <div class="map-caption"><span class="compass">N<br>↑</span><span>ДАНЦИГ<br><small>Anno Domini 1450</small></span></div>
+        <div class="map-tools"><button id="labels" aria-pressed="true" title="Подписи зданий">Aa</button><button id="zoom-in" aria-label="Приблизить">+</button><button id="zoom-out" aria-label="Отдалить">−</button><button id="center" aria-label="Показать весь город">⌖</button></div>
+        <div id="map-tooltip" class="map-tooltip" hidden></div>
+        <div class="map-bottom"><span><i class="dot amber"></i>Ремесленники <i class="dot green"></i>Горожане <i class="dot purple"></i>Служители</span><span id="map-status">Город просыпается</span></div>
+      </div>
+      <div class="time-controls"><div class="playback"><button id="pause" aria-label="Приостановить симуляцию">Ⅱ</button><div class="speeds" aria-label="Скорость времени"><button data-speed="1" class="active" aria-pressed="true">1×</button><button data-speed="3" aria-pressed="false">3×</button><button data-speed="10" aria-pressed="false">10×</button></div><span id="day-count">День 1</span></div><button id="next-day" class="text-button">До следующего утра <span>↗</span></button></div>
+      <div class="ticker"><span>ГОРОДСКИЕ ВЕСТИ</span><p id="latest-event">На рыночной площади начинают собираться торговцы.</p><button id="open-log" aria-label="Открыть хронику">↗</button></div>
+    </section>
+    <aside class="sidebar">
+      <nav class="tabs" aria-label="Обозрение города"><button data-tab="people" class="active" aria-pressed="true">Жители</button><button data-tab="buildings" aria-pressed="false">Здания</button><button data-tab="city" aria-pressed="false">Город</button><button data-tab="log" aria-pressed="false">Хроника</button></nav>
+      <div id="panel"></div>
+    </aside>
+  </main>
+  <footer><span>ДАНЦИГ <i>1450</i><span class="footer-separator">/</span>Маленький город. Большая жизнь.</span><div><span id="save-status">Автосохранение включено</span><button id="reset" class="text-button">Новая история</button></div></footer>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <dialog id="help-dialog"><button class="dialog-close" data-close aria-label="Закрыть">×</button><span class="eyebrow">ДОБРО ПОЖАЛОВАТЬ В ДАНЦИГ</span><h2>Город живёт без указаний.</h2><p>Наблюдайте за жителями и вмешивайтесь, когда сочтёте нужным. Нажмите на человека или здание на карте, либо выберите их в списке.</p><div class="help-grid"><div><b>Работа и повседневность</b><p>Утром горожане идут на работу. Вечером — на рынок, в церковь или трактир. Ночью возвращаются домой. Голод, усталость, вера и характер влияют на решения.</p></div><div><b>Экономика и власть</b><p>Ферма → мельница → пекарня. Рыбаки дополняют запасы. Налог пополняет казну, но снижает довольство. Каждые 12 дней горожане выбирают бургомистра.</p></div><div><b>Смена поколений</b><p>24 дня = один год, 6 дней = сезон. Жители взрослеют, заводят семьи, рожают детей и умирают. День занимает около 80 секунд на скорости 1×.</p></div><div><b>Ваше влияние</b><p>В разделе «Город» можно изменить налог, закупить еду, провести праздник и починить пострадавшие здания. Пробел — пауза; 1, 2, 3 — скорость.</p></div></div><p class="muted">Это условный город, вдохновлённый The Guild 2. Экономика и демография намеренно упрощены: общий рынок, условные цены, ускоренное время. Игра хранится в этом браузере.</p><button class="primary" data-close>Пусть город живёт</button></dialog>
+  <dialog id="reset-dialog"><h2>Начать новую историю?</h2><p>Текущий город и его сохранение будут заменены новым. Начальные условия останутся прежними.</p><div class="dialog-actions"><button class="quiet" data-close>Оставить город</button><button class="primary" id="confirm-reset">Начать заново</button></div></dialog>
+  <script src="sim.js"></script><script src="app.js"></script>
+</body>
+</html>
