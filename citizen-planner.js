@@ -8,7 +8,7 @@
   // buying and eating; real stocks, wages and hiring are checked again on arrival.
   function foodPlan(s,p){
     const home=s.building(p.homeId),food=s.suppliers(p,'food',1).slice(0,3),employers=Labour.offers(s,p).slice(0,2);
-    const initial={cash:p.coins,bag:(p.bag.bread||0)+(p.bag.fish||0),home:home.stock.bread+home.stock.fish,job:p.jobId,worked:false,ate:false,at:p.location||p.goal,steps:[],cost:0,minutes:0};
+    const initial={cash:p.coins,bag:s.foodAmount(p.bag),home:s.foodAmount(home.stock),job:p.jobId,worked:false,ate:false,at:p.location||p.goal,steps:[],cost:0,minutes:0};
     const queue=[initial],seen=new Map();let expanded=0;
     const push=(x,action,effect,extraCost=0)=>{
       const route=x.steps.length?s.routeBetween('b:'+x.at,'b:'+action.target):null;
@@ -41,7 +41,7 @@
     return{steps:[],expanded,minutes:0};
   }
   function candidates(s,p,add){
-    const home=s.building(p.homeId);if(p.hunger>=55||home.stock.bread+home.stock.fish>=1||(p.bag.bread||0)+(p.bag.fish||0)>=1)return;
+    const home=s.building(p.homeId);if(p.hunger>=55||s.foodAmount(home.stock)>=1||s.foodAmount(p.bag)>=1)return;
     if(p.jobId&&p.coins>=Math.min(...s.suppliers(p,'food',1).map(x=>x.price)))return;
     const plan=foodPlan(s,p);Mind.ensure(s,p).search={expanded:plan.expanded,limit:LIMIT,depth:plan.steps.length,at:s.now};
     if(!plan.steps.length)return;

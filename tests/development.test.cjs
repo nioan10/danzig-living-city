@@ -1,3 +1,4 @@
+const BuildFixture=require('./helpers/construction.cjs');
 const test=require('node:test'),assert=require('node:assert/strict');
 const {Simulation,Development:D,Government:G,Housing,Finance,Brain}=require('../sim.js');
 const clone=s=>Simulation.fromJSON(JSON.parse(JSON.stringify(s)));
@@ -7,7 +8,7 @@ function population(s,n){while(s.alive.length<n){const p=s.createPerson('Гор�
 function mature(s){s.day=12;for(const b of s.buildings)Object.assign(b.development.progression,{levelSince:0,observedDay:s.day,lastCash:b.cash,samples:Array.from({length:12},(_,i)=>({day:i+1,net:10}))});}
 function hall(){const s=new Simulation();population(s,64);s.treasury=5000;s.minute=600;mature(s);D.review(s);return {s,b:s.building('hall'),p:s.person(s.mayorId)};}
 function home(){const s=new Simulation(),b=s.building('h0');mature(s);for(const p of s.people.slice(0,7))p.homeId=b.id;D.review(s);const p=D.owner(s,b);p.coins=5000;return{s,b,p};}
-function complete(s,b){s.day=Math.floor(b.development.project.until/1440);s.minute=b.development.project.until%1440;D.tick(s);}
+function complete(s,b){BuildFixture.complete(s,b);}
 
 test('новые и старые города получают первые уровни без бесплатной прокачки и расходов',()=>{
  const s=new Simulation(),raw=JSON.parse(JSON.stringify(s));delete raw.state.development;delete raw.state.government;for(const b of raw.state.buildings)delete b.development;

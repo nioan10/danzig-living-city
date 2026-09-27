@@ -5,7 +5,7 @@
   class CityMap{
     constructor(canvas,getSim,getSelection,onSelect){
       Object.assign(this,{canvas,ctx:canvas.getContext('2d'),getSim,getSelection,onSelect,zoom:1,panX:0,panY:0,labels:true,routes:false,mode:'plan',filter:'all',showLots:true,labelHits:[],showPeople:true,followId:null,positions:new Map(),last:0,hover:null,drag:null});
-      this.art=new Image();this.art.onload=()=>canvas.dataset.art='ready';this.art.onerror=()=>canvas.dataset.art='error';this.art.src='assets/danzig-painted.png';
+
       new ResizeObserver(()=>this.resize()).observe(canvas);this.resize();this.bind();
     }
     reset(){this.zoom=1;this.panX=this.panY=0;this.positions.clear();this.followId=null;}
@@ -34,41 +34,28 @@
       c.addEventListener('pointercancel',()=>this.drag=null);c.addEventListener('pointerleave',()=>{this.hover=null;tip.hidden=true;});
       c.addEventListener('wheel',e=>{if(!e.ctrlKey)return;e.preventDefault();this.zoomBy(e.deltaY<0?.15:-.15);},{passive:false});
     }
-    label(c,text,x,y,s,important=false){const size=(important?11:10)/s;c.font=`${important?'600':'500'} ${size}px Segoe UI`;c.textAlign='center';const w=c.measureText(text).width,pad=7/s;c.fillStyle='#162623e8';c.beginPath();c.roundRect(x-w/2-pad,y-size-pad*.6,w+pad*2,size+pad*1.5,3/s);c.fill();c.strokeStyle='#e4c78b60';c.lineWidth=.5/s;c.stroke();c.fillStyle='#f3e6cc';c.fillText(text,x,y);}
+    label(c,text,x,y,s,important=false){const size=(important?11:10)/s;c.font=`${important?'600':'500'} ${size}px Segoe UI`;c.textAlign='center';const limit=120/s;while(text.length>1&&c.measureText(text).width>limit)text=text.slice(0,-2)+'…';const w=c.measureText(text).width,pad=5/s;c.fillStyle='#162623e8';c.beginPath();c.roundRect(x-w/2-pad,y-size-pad*.6,w+pad*2,size+pad*1.5,3/s);c.fill();c.strokeStyle='#e4c78b60';c.lineWidth=.5/s;c.stroke();c.fillStyle='#f3e6cc';c.fillText(text,x,y);}
     draw(now){
       const sim=this.getSim(),c=this.ctx;const follow=sim.person(this.followId);if(follow&&follow.absence?.status!=='away'){const p=A.personPoint(follow,this.getSelection().paused?1:sim.remainder/5),scale=this.fit*this.zoom;const maxX=Math.max(0,(W.WIDTH*scale-this.width)/2),maxY=Math.max(0,(W.HEIGHT*scale-this.height)/2);this.panX=clamp((W.WIDTH/2-p.x)*scale,-maxX,maxX);this.panY=clamp((W.HEIGHT/2-p.y)*scale,-maxY,maxY);}else if(follow)this.followId=null;const t=this.transform(),d=Math.min(devicePixelRatio||1,2),sel=this.getSelection();
-      c.setTransform(d,0,0,d,0,0);c.fillStyle='#14241e';c.fillRect(0,0,this.width,this.height);c.translate(t.x,t.y);c.scale(t.s,t.s);
-      if(this.mode==='art'&&(!this.art.complete||!this.art.naturalWidth)){c.fillStyle='#d4c19a';c.textAlign='center';c.font='24px Georgia';c.fillText(this.canvas.dataset.art==='error'?'Не удалось загрузить карту':'Открываем атлас города…',800,550);return;}
-      if(this.mode==='plan')DanzigPlan.draw(this,c,sim);else{c.drawImage(this.art,0,0,1600,1100);c.fillStyle='#17282088';c.fillRect(0,0,1600,1100);for(const b of sim.buildings.filter(b=>b.expansion))this.drawExtension(c,b);}
-      if(this.showLots&&(this.filter==='all'||this.filter==='land'))for(const l of W.expansionLots)if(!sim.building(l.id))DanzigPlan.lot(c,l,sel.lot===l.id,t.s);
+      c.setTransform(d,0,0,d,0,0);c.fillStyle='#eef2ef';c.fillRect(0,0,this.width,this.height);c.translate(t.x,t.y);c.scale(t.s,t.s);
+      DanzigPlan.draw(this,c,sim);
+      if(this.showLots&&(this.filter==='all'||this.filter==='land'))for(const l of W.expansionLots)if(!sim.building(l.id))DanzigPlan.lot(c,l,sel.lot===l.id,t.s,this.filter==='land'||this.zoom>=1.65);
       const night=sim.hour>=22||sim.hour<5?.19:sim.hour>=20||sim.hour<7?.08:0;if(night&&this.mode==='art'){c.fillStyle=`rgba(10,22,43,${night})`;c.fillRect(0,0,1600,1100);}
       if(this.routes)for(const e of W.edges)if(!e.expansion||sim.building(e.b.slice(2)))line(c,A.edgePoints(e.a,e.b),'#f6e7b275',1.5/t.s);
       const selected=sel.tab==='people'?sim.person(sel.person):null;
-      if(selected?.path.length){c.setLineDash([5/t.s,4/t.s]);line(c,A.remainingPath(selected),'#fff1ba',2/t.s);c.setLineDash([]);}
+      if(selected?.path.length){c.setLineDash([5/t.s,4/t.s]);line(c,A.remainingPath(selected),'#c4403e',2/t.s);c.setLineDash([]);}
       for(const p of sim.alive){const target=A.personPoint(p,sel.paused?1:sim.remainder/5);this.positions.set(p.id,target);if(!this.visible(p))continue;const at=this.personPosition(p),z=Math.max(1.15,1.2/t.s),chosen=selected?.id===p.id;
         c.fillStyle='#15201bb3';c.beginPath();c.ellipse(at.x+2*z,at.y+2*z,3*z,1.8*z,0,0,Math.PI*2);c.fill();
-        c.fillStyle=p.absence?'#d77052':p.cargo?'#d9a44f':p.id===sim.mayorId?'#c293d2':p.age<16?'#88b5b8':'#f1d1a0';c.beginPath();c.moveTo(at.x,at.y-5*z);c.lineTo(at.x-2.2*z,at.y+2*z);c.lineTo(at.x+2.2*z,at.y+2*z);c.closePath();c.fill();c.fillStyle='#f4d3b0';c.beginPath();c.arc(at.x,at.y-5*z,1.4*z,0,Math.PI*2);c.fill();
+        c.fillStyle=p.absence?'#d77052':p.cargo?'#d9a44f':p.id===sim.mayorId?'#c293d2':p.age<16?'#428b85':'#384f65';c.beginPath();c.moveTo(at.x,at.y-5*z);c.lineTo(at.x-2.2*z,at.y+2*z);c.lineTo(at.x+2.2*z,at.y+2*z);c.closePath();c.fill();c.fillStyle='#f4d3b0';c.beginPath();c.arc(at.x,at.y-5*z,1.4*z,0,Math.PI*2);c.fill();
         if(p.path.length){const gait=Math.sin((sim.now+sim.remainder)*.22+p.id)*1.5*z;line(c,[{x:at.x-z,y:at.y+2*z},{x:at.x-z+gait,y:at.y+5*z}],'#e9d9bb',.9*z);line(c,[{x:at.x+z,y:at.y+2*z},{x:at.x+z-gait,y:at.y+5*z}],'#d5c1a0',.9*z);}
         if(p.cargo){c.fillStyle='#c48c41';c.fillRect(at.x+2*z,at.y-2*z,3*z,3*z);}
         if(chosen){c.strokeStyle='#ffdc86';c.lineWidth=1.6/t.s;c.beginPath();c.arc(at.x,at.y-2*z,7*z,0,Math.PI*2);c.stroke();}
       }
       for(const e of(sim.incidents||[]).filter(e=>e.status==='active'))this.drawIncident(c,e,now,t.s);
       for(const b of sim.buildings.filter(b=>this.matches(b))){const [x,y]=A.centers[b.id];const guild=DanzigGuilds.owner(sim,b);if(guild){line(c,[{x:x+24,y:y-10},{x:x+24,y:y-35}],'#d8c69c',1.2);c.fillStyle=guild.color;c.beginPath();c.moveTo(x+24,y-35);c.lineTo(x+40,y-31);c.lineTo(x+24,y-26);c.fill();} if(b.damaged||b.closedUntil>sim.now){c.fillStyle=b.damaged?'#c1643c':'#af8c4c';c.beginPath();c.arc(x+18,y-27,7/t.s,0,Math.PI*2);c.fill();c.fillStyle='#fff2d6';c.font=`bold ${10/t.s}px Segoe UI`;c.textAlign='center';c.fillText('!',x+18,y-27+3/t.s);}
-        if(sel.tab==='buildings'&&sel.building===b.id||this.hover?.kind==='building'&&this.hover.id===b.id){c.strokeStyle='#ffe1a0';c.lineWidth=2/t.s;c.beginPath();c.ellipse(x,y+15,Math.max(23,b.w*.6),Math.max(18,b.h*.5),0,0,Math.PI*2);c.stroke();}
+        if(sel.tab==='buildings'&&sel.building===b.id||this.hover?.kind==='building'&&this.hover.id===b.id){c.strokeStyle='#bd4834';c.lineWidth=2/t.s;c.beginPath();c.ellipse(x,y+15,Math.max(23,b.w*.6),Math.max(18,b.h*.5),0,0,Math.PI*2);c.stroke();}
       }
       this.drawLabels(c,t.s,sel);
-    }
-    drawExtension(c,b){
-      const [x,y]=A.centers[b.id],door=A.nodes['b:'+b.id],a=A.nodes[b.anchor];
-      line(c,[a,door],'#78694d88',9);line(c,[a,door],'#bea67b',6);
-      const poly=(ps,fill,stroke='#594b38')=>{c.beginPath();ps.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.closePath();c.fillStyle=fill;c.fill();c.strokeStyle=stroke;c.lineWidth=.8;c.stroke();};
-      c.save();c.translate(x,y);c.fillStyle='#413d2840';c.beginPath();c.ellipse(8,22,41,14,-.12,0,Math.PI*2);c.fill();
-      if(['farm','pasture'].includes(b.type)){poly([[-57,10],[-30,-29],[4,-7],[-21,33]],b.type==='farm'?'#b19b58':'#80905b');for(let i=0;i<6;i++)line(c,[{x:-52+i*5,y:7+i*3},{x:-30+i*5,y:-25+i*3}],'#6c713e',2);}
-      poly([[-28,-7],[12,-1],[12,28],[-28,21]],'#dbc6a0');poly([[12,-1],[32,-15],[32,15],[12,28]],'#ad9671');
-      if(b.construction){for(let x=-31;x<35;x+=13)line(c,[{x,y:28},{x,y:-28}],'#685437',2);for(const y of [-19,0,18])line(c,[{x:-36,y},{x:37,y:y+6}],'#937753',2);line(c,[{x:-30,y:22},{x:29,y:-24}],'#c6a57b',2);poly([[-39,25],[-16,29],[-9,22],[-30,18]],'#8e6a49');}
-      else{poly([[-33,-8],[-12,-32],[18,-27],[11,0]],'#8b4e32');poly([[11,0],[18,-27],[37,-16],[32,-12]],'#b5794a');for(let i=0;i<4;i++)line(c,[{x:-29+i*5,y:-8-i*5},{x:12+i*1.4,y:-2-i*6}],'#ba82594d',1);for(const xx of [-26,-8,10])line(c,[{x:xx,y:-4+(xx+26)*.16},{x:xx,y:21+(xx+26)*.16}],'#665238',2);line(c,[{x:-27,y:9},{x:11,y:15}],'#746044',2);poly([[-5,27],[-5,9],[4,10],[4,28]],'#554631');poly([[-22,2],[-14,3],[-14,10],[-22,9]],'#536158');line(c,[{x:-18,y:3},{x:-18,y:9}],'#ddcaa1',1);poly([[21,-20],[21,-35],[26,-36],[26,-24]],'#96755c');if(b.type==='mill'){c.save();c.translate(3,-21);c.rotate(this.getSim().now*.012);for(let i=0;i<4;i++){c.rotate(Math.PI/2);poly([[1,1],[29,1],[29,6],[9,6]],'#d9cfac');}c.restore();}}
-      for(let i=0;i<5;i++)line(c,[{x:-38+i*11,y:36+i*.5},{x:-38+i*11,y:28+i*.5}],'#877254',1.4);line(c,[{x:-40,y:31},{x:9,y:33}],'#9a815b',1.2);c.restore();
-      if(this.labels)this.label(c,(b.construction?'Стройка · ':Danzig.TYPES[b.type].name+' · ')+b.id.slice(3),x,y+49,this.transform().s);
     }
     drawIncident(c,e,now,s){const [x,y]=A.centers[e.targetId],phase=(now*.0003)%1;
       c.strokeStyle=e.type==='fire'?'#ee9160aa':'#ffe4a3aa';c.lineWidth=1.5/s;c.beginPath();c.ellipse(x,y+10,24+phase*17,14+phase*9,0,0,Math.PI*2);c.stroke();
@@ -78,15 +65,28 @@
       this.label(c,e.title,x,y-60,s,true);
     }
     drawLabels(c,s,sel){
-      this.labelHits=[];const sim=this.getSim(),rows=sim.buildings.filter(b=>this.matches(b)).map(b=>({kind:'building',id:b.id,type:b.type,x:A.centers[b.id][0],y:A.centers[b.id][1],text:(b.construction||b.development?.project?'⚒ ':'')+DanzigPlan.names[b.type]+((b.development?.level||1)>1?' '+['','I','II','III'][b.development.level]:'')+(b.expansion?' · '+b.id.slice(3):b.type==='home'?' '+(Number(b.id.slice(1))+1):''),color:DanzigPlan.palette[DanzigPlan.category(b)],selected:sel.tab==='buildings'&&sel.building===b.id,home:b.type==='home'}));
-      if(this.showLots&&(this.filter==='all'||this.filter==='land'))for(const l of W.expansionLots)if(!sim.building(l.id))rows.push({kind:'lot',id:l.id,x:l.artX,y:l.artY,text:'+ '+l.id.slice(3),color:'#3b7251',selected:sel.lot===l.id});
-      rows.sort((a,b)=>Number(b.selected)-Number(a.selected)||Number(a.home)-Number(b.home));
-      const bounds=this.transform(),compact=this.width<500&&this.zoom<1.5&&this.filter==='all';for(const r of rows){const px=r.x*s+bounds.x,py=r.y*s+bounds.y;if(px<0||px>this.width||py<0||py>this.height-32)continue;const text=this.labels?(compact&&!r.selected&&r.kind==='building'?(r.home?r.text.replace('Дом ',''):Danzig.TYPES[r.type].symbol):r.text):r.kind==='lot'?r.text:'●';c.font=`600 ${11/s}px Segoe UI`;const w=c.measureText(text).width+14/s,h=21/s;let box;
-        for(const [dx,dy]of [[0,24],[0,-32/s],[35/s,0],[-35/s,0],[0,34/s]]){const candidate={x:clamp(r.x+dx-w/2,(5-bounds.x)/s,(this.width-5-bounds.x)/s-w),y:clamp(r.y+dy,(5-bounds.y)/s,(this.height-36-bounds.y)/s-h),w,h};if(!this.labelHits.some(b=>candidate.x<b.x+b.w+2/s&&candidate.x+w>b.x-2/s&&candidate.y<b.y+b.h+2/s&&candidate.y+h>b.y-2/s)){box=candidate;break;}}
-        if(!box)box={x:r.x-w/2,y:r.y+24,w,h};
-        pathLabel(c,{...r,text},box,s);this.labelHits.push({...box,id:r.id,kind:r.kind});
+      this.labelHits=[];const sim=this.getSim(),bounds=this.transform(),detail=this.zoom>=1.65||this.filter==='home';
+      const landmarks=['hall','market','church','dock','clinic','school','tavern'];
+      const rows=sim.buildings.filter(b=>this.matches(b)).map(b=>{
+        const selected=sel.tab==='buildings'&&sel.building===b.id,hovered=this.hover?.kind==='building'&&this.hover.id===b.id,home=b.type==='home';
+        const number=b.expansion?b.id.slice(3):home?Number(b.id.slice(1))+1:'';
+        return{kind:'building',id:b.id,x:b.x,y:b.y,w:b.w,h:b.h,home,selected,hovered,text:home?'№ '+number:DanzigPlan.shortNames[b.type]||DanzigPlan.names[b.type],color:DanzigPlan.palette[DanzigPlan.category(b)],priority:selected?100:hovered?90:landmarks.includes(b.type)?60-landmarks.indexOf(b.type):home?0:20};
+      }).filter(r=>(this.labels||r.selected||r.hovered)&&(!r.home||detail||r.selected||r.hovered));
+      rows.sort((a,b)=>b.priority-a.priority||a.y-b.y||a.x-b.x);
+      const occupied=sim.buildings.map(b=>({x:b.x-b.w/2,y:b.y-b.h/2,w:b.w,h:b.h}));
+      if(this.showLots&&(this.filter==='all'||this.filter==='land'))for(const l of W.expansionLots)if(!sim.building(l.id)){const w=l.types.includes('farm')?90:60,h=l.types.includes('farm')?62:42;occupied.push({x:l.x-w/2,y:l.y-h/2,w,h});}
+      const overlaps=(a,b,pad=0)=>a.x<b.x+b.w+pad&&a.x+a.w>b.x-pad&&a.y<b.y+b.h+pad&&a.y+a.h>b.y-pad;
+      const area=Math.min(this.width,W.WIDTH*s)*Math.min(this.height-55,W.HEIGHT*s),budget=Math.max(5,Math.min(28,Math.floor(area/29000)));
+      for(const r of rows){
+        if(this.labelHits.length>=budget&&!r.selected&&!r.hovered)continue;
+        const px=r.x*s+bounds.x,py=r.y*s+bounds.y;if(px<0||px>this.width||py<0||py>this.height-32)continue;
+        c.font='600 '+(10/s)+'px Segoe UI';const w=c.measureText(r.text).width+10/s,h=17/s,gap=3/s;
+        const choices=[{x:r.x-w/2,y:r.y+r.h/2+gap},{x:r.x-w/2,y:r.y-r.h/2-gap-h},{x:r.x+r.w/2+gap,y:r.y-h/2},{x:r.x-r.w/2-gap-w,y:r.y-h/2}];
+        const box=choices.map(a=>({...a,w,h})).find(a=>a.x*s+bounds.x>=4&&(a.x+w)*s+bounds.x<=this.width-4&&a.y*s+bounds.y>=4&&(a.y+h)*s+bounds.y<=this.height-36&&!this.labelHits.some(b=>overlaps(a,b,3/s))&&!occupied.some(b=>overlaps(a,b,1/s)));
+        if(!box)continue; // Keep streets and parcels visible instead of forcing overlapping callouts.
+        c.fillStyle=r.selected?'#fff0c8':'#fffffff0';c.strokeStyle=r.color;c.lineWidth=(r.selected?1.5:.6)/s;c.beginPath();c.roundRect(box.x,box.y,box.w,box.h,3/s);c.fill();c.stroke();c.fillStyle=r.color;c.textAlign='center';c.fillText(r.text,box.x+box.w/2,box.y+12/s);
+        this.labelHits.push({...box,id:r.id,kind:r.kind});
       }
-      function pathLabel(c,r,b,s){line(c,[{x:r.x,y:r.y},{x:b.x+b.w/2,y:b.y+b.h/2}],r.color,1/s);c.fillStyle=r.selected?'#fff3ce':r.kind==='lot'?'#edf1de':'#fff9e9';c.strokeStyle=r.selected?'#98702d':r.color;c.lineWidth=(r.selected?2:1)/s;c.beginPath();c.roundRect(b.x,b.y,b.w,b.h,3/s);c.fill();c.stroke();c.fillStyle=r.color;c.textAlign='center';c.fillText(r.labelText||r.text,b.x+b.w/2,b.y+14/s);}
     }
   }
   root.DanzigMap=CityMap;

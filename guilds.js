@@ -1,6 +1,7 @@
 (function(root){
   'use strict';
   const EnterprisePolicy=typeof module!=='undefined'&&module.exports?require('./enterprise-policy.js'):root.DanzigEnterprisePolicy;
+  const Products=typeof module!=='undefined'&&module.exports?require('./products.js'):root.DanzigProducts;
   const node=typeof module!=='undefined'&&module.exports;
   const W=node?require('./world.js'):root.DanzigWorld,E=node?require('./expansion.js'):root.DanzigExpansion;
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),round=n=>Math.round(n*100)/100;
@@ -12,7 +13,7 @@
     for(const g of v.groups||[]){if(!Number.isFinite(g.cash)||g.cash<0)throw Error('Некорректный капитал гильдии');const recipients=(g.members||[]).map(id=>s.person(id)).filter(p=>p?.alive);if(recipients.length)for(const p of recipients)p.coins+=g.cash/recipients.length;else{const b=s.buildings.find(b=>b.guildId===g.id);if(b){b.cash+=g.cash;if(b.enterprise)b.enterprise.openingCash+=g.cash;}else s.treasury+=g.cash;}}
     for(const p of s.people){delete p.guildId;p.enterpriseWish=null;if(p.plan?.goal==='enterprise')p.plan=null;}
     for(const b of s.buildings){delete b.guildId;if(b.construction)b.construction.guildId=null;if(b.expansion&&b.name.includes(' · '))b.name=s.buildingType(b.type)+' · участок '+b.id.slice(3);}
-    v.groups=[];v.applications=[];v.version=2;v.nextId=1;v.history.unshift({day:s.day,text:'Прежние городские союзы распущены. Их капитал возвращён участникам, здания и стройки сохранены. Новые гильдии будут учреждать семьи.',guildId:null});
+    for(const b of s.buildings)for(const p of [b.construction,b.development?.project])for(const payer of p?.local?.payers||[])if(payer.type==='guild'){payer.type='building';payer.id=b.id;}v.groups=[];v.applications=[];v.version=2;v.nextId=1;v.history.unshift({day:s.day,text:'Прежние городские союзы распущены. Их капитал возвращён участникам, здания и стройки сохранены. Новые гильдии будут учреждать семьи.',guildId:null});
   }
   function ensure(s){
     const created=!s.guilds;
@@ -48,7 +49,7 @@
     note(s,g,p.name+' учредил семейную гильдию. Ремесло: '+s.buildingType(q.type)+'. В общий капитал внесено 100 талеров из накоплений семьи и мастерской.',b.id);return{ok:true,message:'Учреждена семейная гильдия',guildId:id};
   }
   function note(s,g,text,buildingId=null){s.guilds.history.unshift({day:s.day,guildId:g.id,text,buildingId});s.guilds.history=s.guilds.history.slice(0,60);s.log(g.name+': '+text,'guild',g.leaderId,{title:'Решение гильдии',importance:'major',buildingId});}
-  function demand(s){const d={bread:s.living.length*.85,fish:s.living.length*.3,clothes:s.living.length*.04,pottery:s.living.length*.03,furniture:s.living.length*.02,tools:s.living.length*.03};for(const b of s.buildings){const r=s.productionRecipe(b);if(!r||b.construction)continue;const batches=Math.max(1,s.workers(b.id).length)*180/r.time;for(const[k,v]of Object.entries(r.inputs))d[k]=(d[k]||0)+v*batches;}return d;}
+  function demand(s){const d={bread:s.living.length*.85,fish:s.living.length*.3,clothes:s.living.length*.04,pottery:s.living.length*.03,furniture:s.living.length*.02,tools:s.living.length*.03,...s.householdDemand?.(),biscuits:s.living.length*.12};for(const b of s.buildings){const r=s.productionRecipe(b);if(!r||b.construction)continue;const batches=Math.max(1,s.workers(b.id).length)*180/r.time;for(const[k,v]of Object.entries(r.inputs))d[k]=(d[k]||0)+v*batches;}for(const [g,n]of Object.entries(s.constructionDemand?.()||{}))d[g]=(d[g]||0)+n;return d;}
   function assess(s,g,type,market=demand(s),stock=s.goods){
     const spec=E.specs[type],r=s.productionRecipe({type});if(!spec||!r||!g.focus.includes(type))return null;
     const labor=s.alive.filter(p=>p.age>=16&&p.age<65&&!p.absence&&!p.jobId).length;
@@ -83,13 +84,13 @@
   function reviewPermits(s){for(const a of s.guilds.applications.filter(a=>a.status==='pending')){if(s.day-a.day>6){a.status='expired';a.decision='Срок заявки истёк';continue;}if(s.guilds.permitMode==='auto'&&(s.governmentOfficer?.('seneschal')||s.person(s.mayorId))?.alive&&!(s.governmentOfficer?.('seneschal')||s.person(s.mayorId))?.absence){const actor=s.governmentOfficer?.('seneschal')||s.person(s.mayorId),result=decidePermit(s,a.id,true);const text='Заявка на '+s.buildingType(a.type)+': '+(result.ok?'разрешена после проверки.':result.message);s.recordGovernment?.('seneschal',actor,text);s.log(actor.name+': '+text,'politics',actor.id,{title:'Ратуша рассмотрела проект',buildingId:result.ok?a.lotId:'hall'});}}}
   function daily(s){const state=ensure(s);if(state.lastDay===s.day)return;state.lastDay=s.day;const market=demand(s);
     for(const b of s.buildings){const e=b.enterprise,g=owner(s,b),r=s.productionRecipe(b);if(!e||!r||b.construction)continue;
-      const profit=b.cash-e.openingCash;e.lastProfit=round(profit);e.profitTotal+=profit;
+      const ledger=b.business?.days.find(d=>d.day===s.day-1),profit=ledger?ledger.revenue-ledger.cost-ledger.overhead:b.cash-e.openingCash;e.lastProfit=round(profit);e.profitTotal+=profit;
       const tax=Math.min(b.cash,Math.max(0,profit)*state.profitRate/100);b.cash-=tax;s.changeTreasury(tax,'guildProfit');state.taxPaid+=tax;e.profitTax+=tax;
       if(g){
         const reserve=180+Object.entries(r.inputs).reduce((n,[k,v])=>n+s.commerce.prices[k]*v*4,0),surplus=Math.max(0,b.cash-reserve)*.18;b.cash-=surplus;g.cash+=surplus;
         if(b.cash<25&&g.cash>80){const aid=Math.min(60-b.cash,g.cash-80);b.cash+=aid;g.cash-=aid;}
       }
-      EnterprisePolicy.review(s,b,market);
+      Products.choose(s,b,s.productRecipes(b)[0],market);EnterprisePolicy.review(s,b,market);
       e.daysIdle=!s.workers(b.id).length?e.daysIdle+1:0;e.revenue=0;
     }
     for(const g of state.groups){const living=members(s,g);for(const p of living){if(p.hunger<35||p.health<50||p.coins<=100)continue;const contribution=Math.min(3,(p.coins-100)*(p.traits.includes('Амбициозный')?.06:.025));p.coins-=contribution;g.cash+=contribution;g.invested+=contribution;}

@@ -2,6 +2,7 @@
   'use strict';
   const node=typeof module!=='undefined'&&module.exports;
   const Housing=node?require('./housing.js'):root.DanzigHousing;
+  const Construction=node?require('./construction.js'):root.DanzigConstruction;
   const COSTS={home:{second:600,third:2400,extra:180},production:{second:900,third:3600,extra:270},service:{second:750,third:3000,extra:225},hall:{second:1600,third:6400,extra:320}};
   const PACE={second:{settle:6,build:6},third:{settle:24,build:12},extra:{settle:3,build:[3,4,6]}};
   const HALL={1:{name:'Малая ратуша',population:0,cost:0},2:{name:'Городской магистрат',population:64,cost:COSTS.hall.second},3:{name:'Большая ратуша',population:96,cost:COSTS.hall.third}};
@@ -45,7 +46,7 @@
   }
   const funds=(s,b)=>wallets(s,b).reduce((n,w)=>n+Math.max(0,w.target[w.key]-w.reserve),0);
   function options(s,b){
-    const l=level(b),k=kind(s,b),cost=COSTS[k],result=[];
+    const l=level(b),k=kind(s,b),cost=Object.fromEntries(Object.entries(COSTS[k]).map(([key,n])=>[key,n*(k==='home'?Housing.residenceSpec(b).upgrade:1)])),result=[];
     if(l<3)result.push({id:'level',level:l+1,name:k==='hall'?HALL[l+1].name:'Уровень '+(l+1),cost:l===1?cost.second:cost.third,days:l===1?PACE.second.build:PACE.third.build,effect:k==='home'?'+3 места без тесноты':k==='production'?'+1 рабочее место, скорость +20%':k==='hall'?'Новые должности и полномочия':'Эффективность услуги +20%'});
     for(let n=1;n<=l;n++)if(!has(b,n))result.push({id:'extra'+n,level:n,name:EXTRAS[k][n-1][0],effect:EXTRAS[k][n-1][1],cost:cost.extra*2**(n-1),days:PACE.extra.build[n-1]});
     return result;
@@ -103,7 +104,7 @@
     if(b.construction||b.development.project)blocked='Работы уже идут.';
     else if(!p?.alive||p.absence)blocked='Нет доступного владельца, который примет решение.';
     else if(b.damaged||!s.isOpen(b))blocked='Сначала нужно восстановить работу двора.';
-    else if(s.incidents.some(e=>e.type==='blockade'&&e.status==='active'))blocked='Блокада: подрядчик не может доставить материалы.';
+
     else if(option.id==='level'&&b.type!=='hall'&&option.level>level(s.building('hall'))+1)blocked='Для третьего уровня нужна ратуша второго уровня.';
     else if(!motive.score)blocked=motive.reason;
     else if(available+1e-8<option.cost)blocked=`Свободно ${Math.floor(available)} из ${option.cost} тал.; семейные и оборотные резервы неприкосновенны.`;
@@ -135,17 +136,17 @@
     const check=assess(s,b,option);if(!check.ok){p.developmentWish=null;b.development.assessment=check.message;return{ok:false,message:check.message};}
     let left=option.cost;const payments=[];
     for(const w of wallets(s,b)){const amount=Math.min(left,Math.max(0,w.target[w.key]-w.reserve));if(!amount)continue;
-      if(w.key==='treasury')s.changeTreasury(-amount,'development');else w.target[w.key]-=amount;
-      payments.push({source:w.label,amount});left-=amount;if(left<1e-8)break;
+      if(w.key==='treasury'){s.changeTreasury(-amount,'development');s.spendDevelopmentFund?.(amount);}else w.target[w.key]-=amount;
+      payments.push({source:w.label,amount,type:w.key==='treasury'?'city':w.key==='coins'?'person':s.buildings.includes(w.target)?'building':'guild',id:w.target.id??null});left-=amount;if(left<1e-8)break;
     }
     b.development.project={...option,startedAt:s.now,until:s.now+option.days*1440,personId:p.id,reason:check.reason,payments};
-    s.development.started++;s.development.spent+=option.cost;p.developmentWish=null;
+    Construction.start(s,b,b.development.project,payments);s.development.started++;s.development.spent+=option.cost;p.developmentWish=null;
     note(s,b,p,'Начато: '+option.name+'. '+check.reason+' Подряд '+option.cost+' тал.; срок '+option.days+' дн.','start');
     return{ok:true,message:'Владелец оплатил улучшение. Двор продолжает работать во время перестройки.'};
   }
   function note(s,b,p,text,phase){const row={at:s.now,buildingId:b.id,personId:p?.id||null,text,phase};s.development.history.unshift(row);s.development.history=s.development.history.slice(0,80);s.log((p?p.name+': ':'')+text,'development',p?.id,{title:phase==='start'?'Владелец развивает свой двор':'Улучшение завершено',buildingId:b.id,importance:'major'});}
   function tick(s){
-    for(const b of s.buildings){const v=b.development,q=v?.project;if(!q||q.until>s.now)continue;
+    for(const b of s.buildings){const v=b.development,q=v?.project;if(!q||q.until>s.now||!Construction.finish(s,b,q))continue;
       if(q.id==='level')v.level=q.level;else v.extras.push(q.level);
       if(q.id==='level')v.progression.levelSince=s.now;
       Object.assign(v.progression,{nextAt:s.now+(q.id==='level'?6:3)*1440,observedDay:s.day,lastCash:b.cash,samples:[]});

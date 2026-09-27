@@ -32,7 +32,7 @@ test('мобилизация сохраняет людей и товары, пр
   const s=new Simulation(),before=s.goods,r=s.triggerCrisis('mobilization',{percent:25,days:1});
   assert.equal(r.ok,true);const ids=r.incident.affected;assert.ok(ids.length>0);assert.ok(!ids.includes(s.mayorId));
   assert.deepEqual(s.goods,before);assert.equal(s.living.length,48);
-  for(const id of ids){const p=s.person(id);assert.equal(p.jobId,null);assert.equal(p.absence.status,'departing');assert.equal(p.path.at(-1).id,'southRoad');assert.ok(p.path.some(n=>n.id==='southGate'));}
+  for(const id of ids){const p=s.person(id);assert.equal(p.jobId,null);assert.equal(p.absence.status,'departing');assert.equal(p.path.at(-1).id,'southRoad');if(World.insideTown(p.x,p.y))assert.ok(p.path.some(n=>World.gates.includes(n.id)));assert.ok(p.path.every((n,i)=>World.edges.some(e=>e.a===(i?p.path[i-1].id:p.navNode)&&e.b===n.id||e.b===(i?p.path[i-1].id:p.navNode)&&e.a===n.id)));}
   s.advance(240);assert.ok(ids.every(id=>s.person(id).absence.status==='away'));assert.equal(s.alive.length,48-ids.length);
   const reserve=ids.map(id=>({id,hunger:s.person(id).hunger,coins:s.person(id).coins}));
   s.advance(120);for(const x of reserve){assert.equal(s.person(x.id).hunger,x.hunger);assert.equal(s.person(x.id).coins,x.coins);}

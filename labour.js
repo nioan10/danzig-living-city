@@ -9,7 +9,7 @@
   function rate(s,p,b){const c=ensure(s,p),advertised=b.wage*(c.job===b.id&&c.apprentice?.7:1);return c.job===b.id&&c.termUntil>s.day?Math.max(advertised,c.contractRate):advertised;}
   function observe(s,p,b){
     const c=ensure(s,p);if(!s.jobSlots(b)||b.type==='hall')return;
-    const entry={id:b.id,wage:b.wage,slots:Math.max(0,s.jobSlots(b)-s.workers(b.id).length),at:s.now,open:s.isOpen(b),source:'visit'};
+    const entry={id:b.id,wage:b.wage,slots:Math.max(0,s.hiringSlots(b)-s.workers(b.id).length),at:s.now,open:s.isOpen(b),source:'visit'};
     c.known=c.known.filter(x=>x.id!==b.id);c.known.push(entry);c.known=c.known.slice(-64);
   }
   function search(s,p){
@@ -33,7 +33,7 @@
   }
   function hire(s,p,b){
     const c=ensure(s,p);c.applications++;observe(s,p,b);
-    if(!eligible(s,p)||!s.isOpen(b)||b.type==='hall'||s.workers(b.id).length>=s.jobSlots(b))return{ok:false,message:'Работодатель отказал: свободного места нет.'};
+    if(!eligible(s,p)||!s.isOpen(b)||b.type==='hall'||s.workers(b.id).length>=s.hiringSlots(b))return{ok:false,message:'Работодатель отказал: свободного места нет.'};
     const apprentice=qualification(p,b)<1,required=b.wage*(s.workers(b.id).length+1)*2;
     if(b.cash<required)return{ok:false,message:'Работодатель не может обеспечить даже два оплаченных часа работы.'};
     if(Social.trust(s,s.person(b.ownerId),p)<-35&&qualification(p,b)<1)return{ok:false,message:'Хозяин не доверяет соискателю после прошлых конфликтов.'};

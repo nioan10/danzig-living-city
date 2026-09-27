@@ -22,10 +22,10 @@ test('поля, мельница, пастбище, лес и карьер на�
     const b = s.building(id); assert.equal(World.insideTown(b.x, b.y), false, id);
   }
   assert.ok(World.insideTown(s.building('market').x, s.building('market').y));
-  const route = World.route('b:h0', 'b:farm');
+  const route = World.route('b:h7', 'b:farm');
   assert.ok(route.some(n => n.id === 'westGate'));
   assert.equal(route.at(-1).id, 'b:farm');
-  assert.ok(World.distance('b:h0', 'b:farm') > World.distance('b:h0', 'b:bakery'));
+  assert.ok(World.distance('b:h7', 'b:farm') > World.distance('b:h7', 'b:bakery'));
 });
 
 test('ни одна дорога не пересекает стену вне ворот; все дворы связаны', () => {
@@ -78,9 +78,9 @@ test('сырьё физически перевозится; получение �
 test('закрытая мельница запоминается, пекарь выбирает запасного поставщика', () => {
   const s=new Simulation();const p=s.person(2);s.people=[p];comfortable(p);s.minute=600;
   settle(s,p,'bakery');s.building('bakery').stock.flour=0;s.building('bakery').stock.wood=20;
-  s.act('disrupt','mill');
+  s.building('dock').stock.flour=0;s.observe(p,s.building('dock'));s.act('disrupt','mill');
   until(s,()=>p.memories.some(m=>m.subject==='mill'&&m.kind==='closed'));
-  s.advance(5);
+  s.building('dock').stock.flour=50;s.observe(p,s.building('dock'));p.plan=null;s.advance(5);
   assert.equal(p.plan.goal,'supply');
   assert.equal(p.plan.steps[0].target,'dock');
   assert.ok(p.memories.some(m=>m.subject==='mill'&&m.value<0));
@@ -125,6 +125,8 @@ test('старое сохранение переносит людей, семь�
   assert.equal(s.day,old.day);assert.equal(s.treasury,old.treasury);assert.equal(s.alive.length,old.alive.length);
   assert.equal(s.person(2).coins,old.person(2).coins);assert.equal(s.person(2).spouseId,old.person(2).spouseId);
   assert.equal(s.buildings.length,34);assert.equal(s.toJSON().version,2);
+  assert.equal(s.titles.sinceDay,s.day);assert.equal(s.titles.revenue,0);
+  assert.ok(s.people.filter(p=>p.estate==='noble').every(p=>p.title.rank===3&&p.title.source==='existing'));
   for(const p of s.alive)assert.equal(p.navNode,'b:'+p.homeId);
   s.advance(60);assert.ok(s.decisions>0);
 });

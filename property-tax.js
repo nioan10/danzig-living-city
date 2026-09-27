@@ -13,7 +13,7 @@
   function quote(s,b){
     const p=ensure(s),level=b.development?.level||1,inside=W.insideTown(b.x,b.y),area=Math.max(.75,Math.min(1.5,b.w*b.h/(54*42))),units=Math.round(area*4)/4;
     const exemption=exempt.has(b.type)?'Общественная служба: освобождена':b.construction?'Строительство ещё не завершено':!s.isOpen(b)?'Двор временно не работает':b.type==='home'&&!owner(s,b)?'Нет взрослого хозяина':'';
-    const assessed=!p.enabled||exemption?0:round(p.rate*level*units*(inside?1:.5));
+    const assessed=!p.enabled||exemption?0:round(p.rate*level*units*H.district(b).tax*(b.type==='home'?H.residenceSpec(b).tax:1));
     const available=wallets(s,b).reduce((n,w)=>n+Math.max(0,w.target[w.key]-w.reserve),0),paid=Math.min(assessed,Math.floor((available+1e-8)*100)/100);
     return{assessed,paid,relief:round(assessed-paid),level,units,inside,exemption:exemption||(!p.enabled?'Сбор отменён':paid<assessed?'Льгота: защищены деньги на жизнь и работу':'')};
   }
@@ -29,7 +29,7 @@
   function review(s,budget){const p=ensure(s);if(!p.auto||s.day<p.nextReview)return;p.nextReview=s.day+3;const actor=s.governmentOfficer?.('treasurer')||s.person(s.mayorId);if(!actor?.alive||actor.absence)return;
     const before=p.rate,wasEnabled=p.enabled,distressed=p.latest?.assessed>0&&p.latest.relief/p.latest.assessed>.6;
     if(s.region.debt||s.treasury<budget.reserve||budget.days>=3&&budget.net<0){p.rate=Math.min(distressed?Math.max(1.25,p.rate):3,Math.max(.5,p.rate)+.25);p.enabled=true;}
-    else if(budget.days>=3&&budget.net>5&&s.treasury>budget.reserve*4)p.rate=Math.max(.5,p.rate-.25);
+    else if(budget.days>=6&&budget.sustainableNet>10&&s.fiscal.spending.capital.balance>=budget.capitalTarget&&s.treasury>budget.reserve+budget.capitalTarget+100&&!s.fiscal.infrastructure.arrears)p.rate=Math.max(.5,p.rate-.25);
     p.lastReview={day:s.day,reason:distressed?'Многие хозяйства нуждаются в льготах: не усиливаю нагрузку сверх текущего предела.':p.rate>before?'Повышаю сбор с обеспеченных дворов для покрытия обязательств.':p.rate<before?'Казна имеет запас: снижаю сбор.':'Сохраняю ставку сбора с дворов.'};
     if(before!==p.rate||wasEnabled!==p.enabled)s.log(`${actor.name}: сбор с дворов ${p.rate} тал. за единицу площади и уровень в день. ${p.lastReview.reason}`,'politics',actor.id,{title:'Ставка сбора за городской участок',buildingId:'hall'});
   }

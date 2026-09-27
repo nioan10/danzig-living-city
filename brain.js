@@ -4,6 +4,9 @@
   const Mind=node?require('./citizen-mind.js'):root.DanzigMind,Labour=node?require('./labour.js'):root.DanzigLabour,Planner=node?require('./citizen-planner.js'):root.DanzigPlanner;
   const Intentions=node?require('./intentions.js'):root.DanzigIntentions,Agreements=node?require('./agreements.js'):root.DanzigAgreements;
   const EnterprisePolicy=node?require('./enterprise-policy.js'):root.DanzigEnterprisePolicy;
+  const Households=node?require('./households.js'):root.DanzigHouseholds;
+  const Construction=node?require('./construction.js'):root.DanzigConstruction;
+  const Civic=node?require('./civic-life.js'):root.DanzigCivic;
   const clamp=(n,a=0,b=100)=>Math.max(a,Math.min(b,n));
   const step=(kind,target,label,extra={})=>({kind,target,label,duration:15,elapsed:0,...extra});
   function options(sim,p){
@@ -19,27 +22,27 @@
       choices.push({goal,title,score:Math.round((score-travel*.12+learned+personal.score)*10)/10,reason,steps,learned,factors:personal.why});
     };
     const foodNeed=hunger*1.3+(p.hunger<25?65:0);
-    if((p.bag.bread||0)+(p.bag.fish||0)>=2&&home.stock.bread+home.stock.fish<4)add('provision','Отнести уже купленную еду семье',88,'Продукты уже со мной. Сначала пополню домашний запас',[step('storeFood',home.id,'Отнести припасы домой',{duration:5})]);
+    if(sim.foodAmount(p.bag)>=2&&sim.foodAmount(home.stock)<4)add('provision','Отнести уже купленную еду семье',88,'Продукты уже со мной. Сначала пополню домашний запас',[step('storeFood',home.id,'Отнести припасы домой',{duration:5})]);
     if(job&&['bakery','fish'].includes(job.type)&&sim.canProduce(job)&&job.cash>2&&p.hunger<65){
-      const good=job.type==='bakery'?'bread':'fish';
+      const good=sim.productionRecipe(job).out;
       add('makeMeal','Заработать и приготовить еду',foodNeed+18,'Моё ремесло даёт еду. Выполню работу и куплю порцию из свежей партии',[
         step('work',job.id,'Приготовить свежую партию',{duration:90}),step('buyFood',job.id,'Купить порцию',{good,amount:1}),step('eatBag',job.id,'Поесть',{duration:10})]);
     }
-    if((p.bag.bread||0)+(p.bag.fish||0)>=1)add('eat','Поесть из дорожного запаса',foodNeed+8,'Еда уже с собой; можно поесть без новых расходов',[step('eatBag',p.location||p.goal,'Поесть',{duration:10})]);
-    if(home.stock.bread+home.stock.fish>=1)add('eat','Поесть дома',foodNeed+(has('Бережливый')?12:4),'Дома есть припасы. Семейная еда обойдётся дешевле покупки',[step('eatHome',home.id,'Вернуться домой и поесть',{duration:15})]);
+    if(sim.foodAmount(p.bag)>=1)add('eat','Поесть из дорожного запаса',foodNeed+8,'Еда уже с собой; можно поесть без новых расходов',[step('eatBag',p.location||p.goal,'Поесть',{duration:10})]);
+    if(sim.foodAmount(home.stock)>=1)add('eat','Поесть дома',foodNeed+(has('Бережливый')?12:4),'Дома есть припасы. Семейная еда обойдётся дешевле покупки',[step('eatHome',home.id,'Вернуться домой и поесть',{duration:15})]);
     const foodOffers=sim.suppliers(p,'food',1).slice(0,3);
     for(const offer of foodOffers){
-      const affordable=p.coins>=offer.price,household=home.stock.bread+home.stock.fish;
+      const foodMoney=sim.householdFoodMoney(p),affordable=foodMoney>=offer.price,household=sim.foodAmount(home.stock);
       const trust=sim.trust(p,offer.id),score=foodNeed-4+(has('Бережливый')?-offer.price*4:0)+trust*.12;
       if(affordable&&daylight){
         const provisionPending=Mind.activeClaim(sim,p,'provision');
         if(provisionPending)add('eat','Купить одну порцию для себя',score,'Припасы для дома уже несёт другой житель. Куплю только порцию на сейчас',[
           step('buyFood',offer.id,'Купить одну порцию',{good:offer.good,amount:1}),step('eatBag',offer.id,'Поесть',{duration:10})]);
         else add('eat','Купить еду и вернуться домой',score,`${sim.building(offer.id).name}: ${offer.price.toFixed(1)} тал. за порцию; путь около ${Math.ceil(walk(offer.id))} мин.`,[
-          step('buyFood',offer.id,'Купить продукты',{good:offer.good,amount:Math.min(4,Math.floor(p.coins/offer.price))}),
+          step('buyFood',offer.id,'Купить продукты',{good:offer.good,amount:Math.min(4,Math.floor(foodMoney/offer.price))}),
           step('storeFood',home.id,'Отнести покупку семье',{duration:5}),step('eatHome',home.id,'Поесть',{duration:15})]);
         if(household<Math.max(3,Mind.ensure(sim,p).forecast.dailyFood) && p.age>=16)add('provision','Пополнить семейные припасы',45+Math.max(0,3-household)*9+(has('Бережливый')?12:0)+(has('Добрый')?9:0),`В доме осталось ${Math.floor(household)} порций. Нужно позаботиться о семье`,[
-          step('buyFood',offer.id,'Купить продукты для семьи',{good:offer.good,amount:Math.min(6,Math.floor(p.coins/offer.price))}),step('storeFood',home.id,'Доставить припасы домой',{duration:5})]);
+          step('buyFood',offer.id,'Купить продукты для семьи',{good:offer.good,amount:Math.min(6,Math.floor(foodMoney/offer.price))}),step('storeFood',home.id,'Доставить припасы домой',{duration:5})]);
       }
       if(!affordable&&job&&sim.isOpen(job)&&job.cash>3&&sim.canProduce(job)&&daylight)add('earnFood','Заработать на еду',foodNeed+3,'На покупку не хватает денег. Сначала выполню работу, затем зайду за едой',[
         step('work',job.id,'Заработать на покупку',{duration:90}),step('buyFood',offer.id,'Купить еду',{good:offer.good,amount:1}),step('eatBag',offer.id,'Поесть',{duration:10})]);
@@ -70,7 +73,8 @@
     }
     Labour.candidates(sim,p,add,step,household);Planner.candidates(sim,p,add);
     Intentions.candidates(sim,p,add,step);Agreements.candidates(sim,p,add,step);
-    EnterprisePolicy.candidates(sim,p,add,step);
+    EnterprisePolicy.candidates(sim,p,add,step);Households.candidates(sim,p,add,step);
+    Construction.candidates(sim,p,add,step);
     if(p.age>=6&&p.age<16&&sim.hour>=8&&sim.hour<16)add('learn','Пойти учиться',45+(has('Амбициозный')?18:0),'Учёба пригодится, когда придёт время выбрать ремесло',[step('learn','school','Учиться чтению и счёту',{duration:100})]);
     const social=(100-p.social)*.85+(has('Общительный')?23:0)-(has('Замкнутый')?22:0);
     if(daylight){
@@ -84,7 +88,7 @@
       if(sim.festivalDay===sim.day)add('festival','Пойти на городской праздник',social+28,'На площади собираются соседи. Можно отдохнуть вместе',[step('social','market','Побыть на празднике',{duration:80})]);
       add('explore','Узнать городские новости',12+(has('Амбициозный')?8:0),'Посмотрю цены на рынке и поговорю с торговцами',[step('observe',p.id%2?'market':'market2','Осмотреть торговые ряды',{duration:35})]);
     }
-    sim.housingCandidate?.(p,add,step);sim.guildCandidate?.(p,add,step);sim.developmentCandidate?.(p,add,step);
+    sim.titleCandidate?.(p,add,step);Civic.candidates(sim,p,add,step);sim.housingCandidate?.(p,add,step);sim.guildCandidate?.(p,add,step);sim.developmentCandidate?.(p,add,step);
     sim.eventCandidates?.(p,add,step);
     if(p.age<6)return choices.filter(c=>['eat','rest','aid','shelter','heal'].includes(c.goal));
     return choices.sort((a,b)=>b.score-a.score);

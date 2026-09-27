@@ -2,6 +2,7 @@
   'use strict';
   const node=typeof module!=='undefined'&&module.exports;
   const Social=node?require('./social-life.js'):root.DanzigSocial,Mind=node?require('./citizen-mind.js'):root.DanzigMind;
+  const Households=node?require('./households.js'):root.DanzigHouseholds;
   const LABELS={loan:'Заём у знакомого',venture:'Партнёрский вклад',supply:'Поставка с предоплатой'};
   const STATUS={proposed:'Обсуждается',active:'Действует',overdue:'Просрочен',fulfilled:'Исполнен',declined:'Отказ',cancelled:'Отменён',closed:'Завершён с убытком'};
   const live=a=>['proposed','active','overdue'].includes(a.status),clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -31,7 +32,8 @@
     const p=s.person(a.borrowerId),q=s.person(a.lenderId),b=s.building(a.buildingId);
     if(!p?.alive||!q?.alive||p.absence||q.absence||s.now>a.expires){a.status='cancelled';return{ok:false,message:'Стороны не смогли встретиться вовремя.'};}
     if(p.location!==a.target||q.location!==a.target||p.path.length||q.path.length)return{ok:false,pending:true};
-    const trust=Social.trust(s,q,p),available=Math.max(0,q.coins-reserve(s,q)),cap=a.kind==='loan'?24:60;
+    const investment=a.kind==='venture'&&b?Households.investment(s,q,b):null;
+    const trust=Social.trust(s,q,p),available=investment?.amount??Math.max(0,q.coins-reserve(s,q)),cap=a.kind==='loan'?24:60;
     const amount=Math.floor(Math.min(a.requested,available,cap)),risk=Mind.ensure(s,q).personality;
     const accept=amount>=2&&trust>=(a.kind==='loan'?15:20)&&(!outstandingOther(s,p,a))&&(a.kind!=='venture'||b?.ownerId===p.id&&s.productionRecipe(b))&&(p.jobId||Social.kin(p,q)||risk.empathy>.65||a.kind==='venture');
     if(!accept){a.status='declined';record(s,a,`${q.name} отказал ${p.name}: не хватает свободных денег, доверия или уверенности в возврате.`);return{ok:false,message:'Собеседник не согласился на условия.'};}
@@ -39,7 +41,7 @@
     if(a.kind==='loan'){p.coins+=amount;a.interest=Social.kin(p,q)?0:.03;a.remaining=amount*(1+a.interest);}
     else {b.cash+=amount;if(b.enterprise)b.enterprise.openingCash+=amount;a.share=.2;a.cap=amount*1.25;ensure(s).invested+=amount;}
     ensure(s).transferred+=amount;Social.change(s,p,q,4,`${q.name} поддержал договорённость деньгами`);
-    record(s,a,`${q.name} передал ${amount} тал. ${a.kind==='loan'?p.name:b.name}. ${a.kind==='loan'?'Возврат к дню '+(a.due+1)+'.':'Участник получает 20% свободной прибыли в течение 24 дней и принимает риск убытка.'}`);return{ok:true};
+    record(s,a,`${q.name} передал ${amount} тал. ${a.kind==='loan'?p.name:b.name}. ${a.kind==='loan'?'Возврат к дню '+(a.due+1)+'.':'Участник получает 20% свободной прибыли в течение 24 дней и принимает риск убытка. '+investment.reason}`);return{ok:true};
   }
   function outstandingOther(s,p,a){return ensure(s).items.some(x=>x.id!==a.id&&x.borrowerId===p.id&&x.kind==='loan'&&['active','overdue'].includes(x.status));}
   function complete(s,a,text){a.status='fulfilled';a.remaining=0;ensure(s).fulfilled++;record(s,a,text);}

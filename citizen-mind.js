@@ -1,6 +1,7 @@
 (function(root){
   'use strict';
   const Intentions=typeof module!=='undefined'&&module.exports?require('./intentions.js'):root.DanzigIntentions;
+  const Households=typeof module!=='undefined'&&module.exports?require('./households.js'):root.DanzigHouseholds;
   const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
   const LABELS={diligence:'Трудолюбие',ambition:'Амбиции',caution:'Осторожность',thrift:'Бережливость',family:'Забота о семье',sociability:'Общительность',loyalty:'Верность делу',empathy:'Сочувствие',curiosity:'Любознательность'};
   const GOALS={security:'Обеспечить запас на три дня',mastery:'Стать мастером своего ремесла',enterprise:'Накопить на собственное дело',standing:'Заслужить уважение горожан',home:'Улучшить условия семьи'};
@@ -20,17 +21,17 @@
     return p.mind;
   }
   function family(s,p){
-    return s.alive.filter(q=>q.homeId===p.homeId&&!q.absence&&(q.id===p.id||q.id===p.spouseId||p.parents.includes(q.id)||q.parents.includes(p.id)||p.parents.some(id=>q.parents.includes(id))));
+    return Households.family(s,p);
   }
   function household(s,p){
     const members=family(s,p),adults=members.filter(q=>q.age>=16&&q.health>30),home=s.building(p.homeId);
-    const diners=s.alive.filter(q=>q.homeId===p.homeId&&!q.absence),food=(home?.stock.bread||0)+(home?.stock.fish||0);
-    const dailyFood=Math.max(1,diners.length)*1.15,coins=members.reduce((n,q)=>n+q.coins,0);
-    const breadPrice=s.commerce?.prices.bread||1,expense=dailyFood*breadPrice;
+    const diners=s.alive.filter(q=>q.homeId===p.homeId&&!q.absence),food=s.foodAmount(home?.stock);
+    const budget=Households.budget(s,p),dailyFood=budget.dailyFood,coins=budget.coins;
+    const breadPrice=s.commerce?.prices.bread||1,expense=budget.expense;
     const ranked=adults.map(q=>{const v=ensure(s,q).personality;return{p:q,score:v.family*12+v.thrift*6+(q.coins>=breadPrice?10:-20)-(q.jobId?3:0)-s.travelMinutes(q,p.homeId)*.03};}).sort((a,b)=>b.score-a.score||a.p.id-b.p.id);
     const sick=members.find(q=>q.sick||q.health<60);
     const carer=adults.filter(q=>q.id!==sick?.id).sort((a,b)=>(ensure(s,b).personality.empathy*10-(b.jobId?3:0))-(ensure(s,a).personality.empathy*10-(a.jobId?3:0))||a.id-b.id)[0];
-    return{members:members.map(q=>q.id),food,foodDays:food/dailyFood,coins,dailyFood,expense,reserve:expense*3,shopper:ranked[0]?.p.id??null,carer:sick?(carer?.id??null):null,sickId:sick?.id??null,dependents:members.filter(q=>q.age<16||q.health<40).length};
+    return{members:members.map(q=>q.id),food,foodDays:budget.foodDays,coins,dailyFood,expense,reserve:budget.reserve,shopper:ranked[0]?.p.id??null,carer:sick?(carer?.id??null):null,sickId:sick?.id??null,dependents:members.filter(q=>q.age<16||q.health<40).length};
   }
   function review(s,p,h=household(s,p)){
     const m=ensure(s,p),v=m.personality;

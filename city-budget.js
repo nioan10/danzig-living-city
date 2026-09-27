@@ -1,7 +1,16 @@
 (function(root){
   'use strict';
   const publicTypes=['hall','school','clinic','church','dock'],sum=o=>Object.values(o||{}).reduce((n,v)=>n+v,0),round=n=>Math.round(n*100)/100;
-  function ensure(s){s.fiscal.spending??={sinceDay:s.day||0,plan:null,history:[],wages:[]};return s.fiscal.spending;}
+  function ensure(s){s.fiscal.spending??={sinceDay:s.day||0,plan:null,history:[],wages:[]};s.fiscal.spending.capital??={balance:0,saved:0,spent:0,lastDay:s.day};return s.fiscal.spending;}
+  function strategy(s){
+    const level=s.building('hall').development?.level||1;
+    const target=level<3?(level===1?1600:6400):1600;
+    const services=s.buildings.filter(b=>publicTypes.includes(b.type)&&!b.construction).reduce((n,b)=>n+wageNeed(s,b),0);
+    return{target,project:level<3?'Ратуша: уровень '+(level+1):'Новые дома и городские службы',operatingTarget:Math.max(100,s.regionBill()*2,services*6),share:.25};
+  }
+  function capitalHeld(s){return Math.min(ensure(s).capital.balance,Math.max(0,s.treasury-protectedCash(s)));}
+  function capitalSpent(s,amount){const c=ensure(s).capital,n=Math.min(c.balance,amount);c.balance-=n;c.spent+=n;}
+  function protectedTotal(s){return protectedCash(s)+capitalHeld(s);}
   function protectedCash(s){
     const bill=s.regionBill(),progress=Math.max(0,Math.min(1,(s.region.period-Math.max(0,s.region.nextDay-s.day)+1)/s.region.period));
     return(bill+Math.min(s.region.debt,bill*.5))*progress;
@@ -12,20 +21,26 @@
   function serviceRequests(s){return s.buildings.filter(b=>publicTypes.includes(b.type)&&!b.construction).map(b=>({id:b.id,wanted:Math.max(0,operatingReserve(s,b)-b.cash),paid:0}));}
   function prepare(s,forecast,upkeep){
     const v=ensure(s);if(v.plan?.day===s.day)return v.plan;
-    const property=s.fiscal.property,oldProperty=(forecast.income.property||0)/Math.max(1,forecast.days),income=Math.max(0,(sum(forecast.income)-(forecast.income.custom||0)-(forecast.income.marketRepayment||0))/Math.max(1,forecast.days)-oldProperty+(property.latest?.day===s.day?property.latest.paid:oldProperty));
-    const regionalDaily=s.regionBill()/s.region.period,debtDaily=Math.min(s.region.debt/30,regionalDaily*.5),reserve=protectedCash(s),cushion=Math.max(0,s.treasury-reserve-Math.max(80,income*3))/6;
-    const envelope=Math.min(Math.max(0,s.treasury-reserve),Math.max(0,income-regionalDaily-debtDaily-(forecast.expenses.administration||0)/Math.max(1,forecast.days))+cushion),services=serviceRequests(s),hungry=s.alive.filter(p=>p.hunger<30).length;
+    const property=s.fiscal.property,oldProperty=(forecast.income.property||0)/Math.max(1,forecast.days),income=Math.max(0,(sum(forecast.income)-(forecast.income.custom||0)-(forecast.income.marketRepayment||0)-(forecast.income.constructionRefund||0)-(forecast.income.titleFees||0)-(forecast.income.crimeFines||0))/Math.max(1,forecast.days)-oldProperty+(property.latest?.day===s.day?property.latest.paid:oldProperty));
+    const regionalDaily=s.regionBill()/s.region.period,debtDaily=Math.min(s.region.debt/30,regionalDaily*.5),reserve=protectedCash(s),policy=strategy(s),capital=v.capital;
+    capital.balance=Math.min(capital.balance,Math.max(0,s.treasury-reserve));
+    let saved=0,contribution=0;if(capital.lastDay<s.day){capital.lastDay=s.day;const surplus=Math.max(0,Math.min(income-regionalDaily-debtDaily,forecast.sustainableNet??forecast.net)),available=Math.max(0,s.treasury-reserve-capital.balance-policy.operatingTarget);contribution=Math.min(Math.max(0,policy.target-capital.balance),surplus*policy.share,available);saved=Math.min(Math.max(0,policy.target-capital.balance),Math.max(contribution,available-income*3));capital.balance+=saved;capital.saved+=saved;}
+    const services=serviceRequests(s),hungry=s.alive.filter(p=>p.hunger<30).length;
+    // Existing savings are for capital projects. Only an actual emergency draws on the operating buffer.
+    const emergency=hungry>Math.max(2,s.alive.length*.1)||s.fiscal.infrastructure.condition<50;
+    const bridge=emergency?Math.max(0,s.treasury-reserve-capital.balance-policy.operatingTarget)/12:0;
+    const envelope=Math.min(Math.max(0,s.treasury-reserve-capital.balance),Math.max(0,income-regionalDaily-debtDaily-(forecast.expenses.administration||0)/Math.max(1,forecast.days)-contribution)+bridge);
     const need={services:sum(services.map(r=>r.wanted)),food:s.food<s.alive.length*1.5?60-Math.min(48,Math.max(0,s.building('market').cash-80)):s.building('church').stock.bread<10?15:0,infrastructure:upkeep+Math.min(s.fiscal.infrastructure.arrears,upkeep*.25),repair:s.buildings.filter(b=>b.damaged&&s.day-b.damageDay>=3).length*20};
     // Essential services and food share a tight envelope. Repairs get the remainder.
     const weights={services:1.2,food:hungry>Math.max(2,s.alive.length*.1)?2:1,infrastructure:1,repair:.3},limits=Object.fromEntries(Object.keys(need).map(k=>[k,0]));let remaining=envelope;
     for(let pass=0;pass<4&&remaining>1e-8;pass++){const keys=Object.keys(need).filter(k=>limits[k]+1e-8<need[k]),weight=keys.reduce((n,k)=>n+weights[k],0);if(!weight)break;const pool=remaining;for(const k of keys){const allocated=Math.min(need[k]-limits[k],pool*weights[k]/weight);limits[k]+=allocated;remaining-=allocated;}}
     const actor=s.governmentOfficer?.('treasurer')||s.person(s.mayorId),reason=income<regionalDaily+debtDaily+sum(need)?'Потребности превышают прогноз доходов. Сокращаю выплаты, сохраняю средства на регион; помощь и работа служб приоритетны.':'Доходы и свободный запас покрывают план. Финансирую обоснованные заявки служб и содержание города.';
-    v.plan={day:s.day,personId:actor?.id||null,income,regionalDaily,debtDaily,reserve,envelope,need,limits,spent:{services:0,food:0,infrastructure:0,repair:0},services,reason};
+    v.plan={day:s.day,personId:actor?.id||null,income,regionalDaily,debtDaily,reserve,envelope,need,limits,spent:{services:0,food:0,infrastructure:0,repair:0},services,saved,capitalTarget:policy.target,capitalBalance:capital.balance,reason:reason+(saved?' Отложено на развитие '+round(saved)+' тал.':'')};
     v.history.unshift({day:s.day,income,envelope,reserve,reason});v.history=v.history.slice(0,30);
     if(s.day%6===0)s.log(`${actor?.name||'Ратуша'}: бюджет дня ${round(envelope)} тал., защищено на регион ${round(reserve)} тал. ${reason}`,'politics',actor?.id,{title:'Ратуша распределила бюджет',buildingId:'hall'});
     return v.plan;
   }
-  function allowance(s,key){const p=ensure(s).plan;if(!p||p.day!==s.day)return Math.max(0,s.treasury-Math.max(60,protectedCash(s)));return Math.max(0,Math.min(p.limits[key]-p.spent[key],s.treasury-protectedCash(s)));}
+  function allowance(s,key){const p=ensure(s).plan;if(!p||p.day!==s.day)return Math.max(0,s.treasury-Math.max(60,protectedTotal(s)));return Math.max(0,Math.min(p.limits[key]-p.spent[key],s.treasury-protectedTotal(s)));}
   function spend(s,key,amount,category=key){const actual=Math.min(Math.max(0,amount),allowance(s,key));if(!actual)return 0;const paid=s.changeTreasury(-actual,category),p=ensure(s).plan;if(p?.day===s.day)p.spent[key]+=paid;return paid;}
   function services(s){const p=ensure(s).plan,requests=serviceRequests(s),wanted=sum(requests.map(r=>r.wanted)),available=Math.min(wanted,allowance(s,'services'));if(!wanted)return;for(const r of requests){const paid=spend(s,'services',available*r.wanted/wanted);s.building(r.id).cash+=paid;if(p?.day===s.day){const row=p.services.find(q=>q.id===r.id);if(row)row.paid+=paid;}}}
   function repair(s){for(const b of s.buildings.filter(b=>b.damaged&&s.day-b.damageDay>=3)){if(allowance(s,'repair')+1e-8<20)break;spend(s,'repair',20);b.damaged=false;b.repairWork=0;s.log('Мастера восстановили '+b.name+'.','economy',null,{buildingId:b.id});}}
@@ -33,6 +48,6 @@
     if(s.food<s.alive.length*1.5){const market=s.building('market'),contribution=Math.min(48,Math.max(0,market.cash-80)),net=60-contribution,paid=spend(s,'food',net);if(paid>0){const fraction=paid/net,repayment=contribution*fraction;market.cash-=repayment;s.changeTreasury(repayment,'marketRepayment');s.changeTreasury(-repayment,'food');market.stock.bread+=80*fraction;s.building('church').stock.bread+=20*fraction;s.log(`Ратуша закупила ${round(100*fraction)} порций еды. Город заплатил ${round(paid)} тал., лавка — ${round(repayment)} тал.`,'food',null,{buildingId:'market'});}}
     const church=s.building('church');if(church.stock.bread<10){const paid=spend(s,'food',15);church.stock.bread+=paid/15*20;}
   }
-  function load(s){const v=ensure(s),finite=n=>Number.isFinite(n)&&n>=0;if(!finite(v.sinceDay)||!Array.isArray(v.history)||!Array.isArray(v.wages))throw Error('Некорректный бюджет ратуши');for(const r of v.wages)if(!finite(r.day)||!r.buildings||!Object.entries(r.buildings).every(([id,n])=>s.building(id)&&finite(n)))throw Error('Некорректные расходы служб');const p=v.plan;if(p&&(!['day','income','regionalDaily','debtDaily','reserve','envelope'].every(k=>finite(p[k]))||!['limits','spent','need'].every(k=>p[k]&&['services','food','infrastructure','repair'].every(c=>finite(p[k][c])))||!Array.isArray(p.services)||!p.services.every(r=>s.building(r.id)&&finite(r.wanted)&&finite(r.paid))))throw Error('Некорректный план расходов');}
-  const api={ensure,protectedCash,recordWage,wageNeed,operatingReserve,prepare,allowance,spend,services,repair,food,load};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.DanzigCityBudget=api;
+  function load(s){const v=ensure(s),finite=n=>Number.isFinite(n)&&n>=0;if(!finite(v.sinceDay)||!Array.isArray(v.history)||!Array.isArray(v.wages))throw Error('Некорректный бюджет ратуши');for(const r of v.wages)if(!finite(r.day)||!r.buildings||!Object.entries(r.buildings).every(([id,n])=>s.building(id)&&finite(n)))throw Error('Некорректные расходы служб');if(!['balance','saved','spent','lastDay'].every(k=>finite(v.capital[k])))throw Error('Некорректный фонд развития');const p=v.plan;if(p&&(!['day','income','regionalDaily','debtDaily','reserve','envelope'].every(k=>finite(p[k]))||!['limits','spent','need'].every(k=>p[k]&&['services','food','infrastructure','repair'].every(c=>finite(p[k][c])))||!Array.isArray(p.services)||!p.services.every(r=>s.building(r.id)&&finite(r.wanted)&&finite(r.paid))))throw Error('Некорректный план расходов');}
+  const api={ensure,strategy,capitalHeld,capitalSpent,protectedCash,protectedTotal,recordWage,wageNeed,operatingReserve,prepare,allowance,spend,services,repair,food,load};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.DanzigCityBudget=api;
 })(typeof window!=='undefined'?window:globalThis);

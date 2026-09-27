@@ -1,6 +1,7 @@
 (function (root) {
   'use strict';
   const WIDTH = 1600, HEIGHT = 1100;
+  const Layout=typeof module!=='undefined'&&module.exports?require('./town-layout.js'):root.DanzigTownLayout;
   // Streets are shared by navigation and rendering. No actor can cross a wall
   // merely because the destination is closer in a straight line.
   const junctions = {
@@ -101,9 +102,11 @@
     [210,970,'pasture',160,960,['farm','pasture','mill']]
   ];
   for(const [i,[x,y,anchor,artX,artY,types]]of extraLand.entries())expansionLots.push({id:'new'+(i+9),name:'Новая слобода · участок '+(i+9),x,y,anchor,artX,artY,types});
+  Layout.apply(junctions,streetSpecs,lots,expansionLots);wall.splice(0,wall.length,...Layout.wall);
   function fromLot([id,type,name,x,y,w,h,anchor,angle],i=0){return {
       id,type,name,x,y,w,h,anchor,angle,
-      door: type==='market'&&id==='market'?{x:925,y:610}:{x:x+Math.sin(angle*Math.PI/180)*-h*.45,y:y+h*.55+16},
+      district:Layout.districtAt(x,y),
+      door:(()=>{const [ax,ay]=junctions[anchor],dx=ax-x,dy=ay-y,t=1/Math.max(Math.abs(dx)/(w/2+6),Math.abs(dy)/(h/2+6),1);return{x:x+dx*t,y:y+dy*t};})(),
       progress:0,output:0,today:0,damaged:false,damageDay:-1,repairedDay:-1,repairWork:0,closedUntil:0,
       stock:{},cash:type==='home'?0:200,wage:1.15+(i%4)*.1,ownerId:null,
     };}
@@ -129,6 +132,23 @@
   }
   function distance(from,to){const path=route(from,to);if(!path)return Infinity;let at=nodes[from],total=0;for(const p of path){total+=Math.hypot(at.x-p.x,at.y-p.y);at=p;}return total;}
   function insideTown(x,y){let inside=false;for(let i=0,j=wall.length-1;i<wall.length;j=i++){const a=wall[i],b=wall[j];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside;}
-  const api={WIDTH,HEIGHT,junctions,nodes,edges,wall,gates,buildings,expansionLots,expansionBuilding,routeBuildings,route,distance,insideTown};
+  function migrate(s){
+    if(s.layoutVersion===Layout.version)return;
+    const oldLayout=s.layoutVersion;
+    for(const b of s.buildings){const q=b.expansion?expansionBuilding(b.id,b.type):buildings().find(v=>v.id===b.id);for(const k of ['x','y','w','h','anchor','angle','door','district'])b[k]=q[k];}
+    for(const p of s.people){const destination=p.path?.at(-1)?.id||'b:'+p.goal;
+      if((oldLayout===2||oldLayout===3)&&p.path.length){
+        const a=nodes[p.navNode],b=nodes[p.path[0].id],dx=b.x-a.x,dy=b.y-a.y,len=dx*dx+dy*dy,t=len?((p.x-a.x)*dx+(p.y-a.y)*dy)/len:0;
+        if(len&&t>=0&&t<=1&&Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy)<.01){
+          const segment=route(a.id,b.id),ahead=segment.filter(n=>((n.x-a.x)*dx+(n.y-a.y)*dy)/len>t+1e-9),passed=segment.filter(n=>!ahead.includes(n));
+          p.navNode=passed.at(-1)?.id||a.id;p.path=[...ahead,...route(b.id,destination)];p.motionSegments=[];continue;
+        }
+      }
+      // Keep people, ownership and carried goods; rebuild travel on the new street survey once.
+      const at=nodes[p.location?'b:'+p.location:p.navNode]||nodes['b:'+p.homeId];p.navNode=at.id;p.x=at.x;p.y=at.y;p.path=p.location?[]:route(at.id,destination)||[];p.motionSegments=[];
+    }
+    s.layoutVersion=Layout.version;
+  }
+  const api={Layout,migrate,WIDTH,HEIGHT,junctions,nodes,edges,wall,gates,buildings,expansionLots,expansionBuilding,routeBuildings,route,distance,insideTown};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.DanzigWorld=api;
 })(typeof window!=='undefined'?window:globalThis);

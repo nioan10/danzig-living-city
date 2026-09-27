@@ -6,7 +6,7 @@ const copy=s=>JSON.parse(JSON.stringify(s));
 test('статистическое чтение не меняет город, случайность, деньги и время',()=>{
   const s=new Simulation(),before=JSON.stringify(s),point=A.capture(s);
   A.points(s,'all');A.accounts(s,30);
-  assert.equal(JSON.stringify(s),before);assert.equal(point.population,48);assert.equal(point.capacity,72);
+  assert.equal(JSON.stringify(s),before);assert.equal(point.population,48);assert.equal(point.capacity,86);
   assert.equal(point.employed+point.jobless,s.alive.filter(p=>p.age>=16&&p.age<65&&!p.absence).length);
   assert.equal(point.personalCash,s.living.reduce((n,p)=>n+p.coins,0));
 });

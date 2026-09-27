@@ -1,0 +1,16 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const {Simulation,Residences:R,Housing:H,Expansion:E,Development:D,Finance,World:W}=require('../sim.js'),P=require('../property-tax.js');
+const clone=s=>Simulation.fromJSON(JSON.parse(JSON.stringify(s)));
+test('жильё различается ценой, вместимостью, арендой и улучшениями',()=>{
+ const s=new Simulation(),rural=s.building('h0'),urban=s.building('h7'),noble=s.building('h10');assert.equal(R.kind(rural),'cottage');assert.equal(R.kind(urban),'townhouse');assert.equal(R.kind(noble),'manor');assert.equal(H.room(rural),6);assert.equal(H.room(urban),8);assert.equal(H.room(noble),10);assert.equal(D.options(s,rural)[0].cost,600);assert.equal(D.options(s,urban)[0].cost,900);assert.equal(D.options(s,noble)[0].cost,1800);assert.ok(H.rent(s,s.people.find(p=>p.homeId==='h10'&&p.age>=18))>H.rent(s,s.person(1)));
+});
+test('сметы домов едины для интерфейса и стройки; поместье только внутри дворянского квартала',()=>{
+ const s=new Simulation();s.treasury=6000;for(const [id,value,cost,residence]of [['new4','home',180,'cottage'],['new1','home',420,'townhouse'],['new25','home:manor',1800,'manor']]){const offer=E.options(s,W.expansionLots.find(l=>l.id===id)).find(o=>o.value===value);assert.equal(offer.cost,cost);const before=s.treasury;assert.ok(s.startConstruction(id,value).ok);assert.equal(before-s.treasury,cost);assert.equal(s.building(id).residence,residence);assert.equal(s.building(id).construction.local.budget,cost);}
+ assert.equal(s.startConstruction('new45','home:manor').ok,false);assert.equal(s.startConstruction('new2','home:manor').ok,false);assert.deepEqual(clone(s).toJSON(),s.toJSON());
+});
+test('недостаток казны не создаёт недооплаченное городское жильё',()=>{const s=new Simulation(),before=JSON.stringify(s);assert.equal(s.startConstruction('new1','home').ok,false);assert.equal(JSON.stringify(s),before);});
+test('поместье принимает только дворянскую семью; патриций не получает это право по богатству',()=>{
+ const s=new Simulation(),p=s.person(1),group=H.family(s,p),b=s.building('h10');for(const q of group){q.coins=10000;q.reputation=100;q.estate='patrician';}assert.equal(H.affordable(s,p,group,b),false);group.find(q=>q.age>=18).estate='noble';assert.equal(H.affordable(s,p,group,b),true);p.estate='common';for(const q of group)q.estate='common';p.housingWish={from:p.homeId,to:b.id,prestige:true};for(const q of s.people.filter(q=>q.homeId===b.id))q.homeId='h11';assert.equal(H.relocate(s,p,b.id,p.homeId).ok,false);
+});
+test('переселенцы не занимают пустое поместье и не становятся дворянами при заселении',()=>{const s=new Simulation();for(const p of s.people.filter(p=>['h10','h11'].includes(p.homeId)))p.homeId='h0';assert.notEqual(R.kind(H.newcomerHome(s)),'manor');});
+test('старый город классифицирует жильё без новой оплаты, неверные виды и места отклоняются',()=>{const s=new Simulation(),raw=JSON.parse(JSON.stringify(s));for(const b of raw.state.buildings)delete b.residence;const r=Simulation.fromJSON(raw);assert.equal(r.treasury,s.treasury);assert.equal(R.kind(r.building('h10')),'manor');for(const [id,kind]of [['h0','manor'],['h7','cottage'],['bakery','townhouse']]){const data=JSON.parse(JSON.stringify(s));data.state.buildings.find(b=>b.id===id).residence=kind;assert.throws(()=>Simulation.fromJSON(data),/жилья/);}});

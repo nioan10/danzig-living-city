@@ -37,7 +37,7 @@
     for(const [key,seat]of Object.entries(v.offices)){
       const p=available(s,seat.personId);if(!p||OFFICES[key].level>hallLevel(s))continue;
       // A part-time council allowance transfers existing city money to a person.
-      const stipend=Math.min(.25,Math.max(0,s.treasury-Math.max(80,s.regionBill()+s.region.debt)));
+      const stipend=Math.min(.25,Math.max(0,s.treasury-Math.max(80,s.regionBill()+s.region.debt+(s.fiscal.spending?.capital?.balance||0))));
       if(stipend){s.changeTreasury(-stipend,'administration');p.coins+=stipend;v.stipends+=stipend;}
       if(v.manual[key]||seat.decision&&s.now-seat.decision.at<3*1440)continue;
       if(key==='treasurer')continue; // Finance.daily performs this office's budget review.
@@ -47,8 +47,8 @@
         changed=s.guilds.permitRate!==rate;s.guilds.permitRate=rate;text=`Сбор за разрешение ${rate}%. ${cash<350?'У семей мало свободного капитала — облегчаю новые проекты.':'Гильдии могут участвовать в расходах на оформление земли.'}`;
       }
       if(key==='captain'){
-        const fires=s.buildings.filter(b=>b.damaged).length,guard=s.treasury<140?.75:fires?1.4:1;
-        changed=v.guard!==guard;v.guard=guard;text=`Дозор: ${Math.round(guard*100)}% обычного бюджета. ${guard<1?'Казна стеснена; сокращаю смены.':fires?'После пожаров усиливаю противопожарную стражу.':'Оставляю обычные смены.'}`;
+        const fires=s.buildings.filter(b=>b.damaged).length,guard=s.treasury<140?.75:fires||s.civic?.cases.some(c=>c.status==='open'&&c.reported)?1.4:1;
+        changed=v.guard!==guard;v.guard=guard;text=`Дозор: ${Math.round(guard*100)}% обычного бюджета. ${guard<1?'Казна стеснена; сокращаю смены.':fires?'После пожаров усиливаю противопожарную стражу.':guard>1?'После сообщений о преступлениях усиливаю дозор.':'Оставляю обычные смены.'}`;
       }
       if(key==='guildmaster'){
         const shops=s.buildings.filter(b=>b.enterprise&&!b.construction),loss=shops.filter(b=>b.enterprise.lastProfit<0).length,rate=loss>shops.length*.4?4:s.treasury<150?10:8;
