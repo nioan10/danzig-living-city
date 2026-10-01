@@ -2,6 +2,7 @@
   'use strict';
   const Mind=typeof module!=='undefined'&&module.exports?require('./citizen-mind.js'):root.DanzigMind;
   const Social=typeof module!=='undefined'&&module.exports?require('./social-life.js'):root.DanzigSocial;
+  const Personality=typeof module!=='undefined'&&module.exports?require('./personality.js'):root.DanzigPersonality;
   const skilled=new Set(['smith','tailor','carpenter','weaver','potter','clinic','school']);
   function eligible(s,p){return p.alive&&!p.absence&&p.age>=16&&p.age<65&&p.id!==s.mayorId;}
   function ensure(s,p){if(!p.career)p.career={since:s.day,job:p.jobId,known:[],searchAt:-10000,applications:0,changes:0,training:0,history:[]};p.career.contractRate??=0;p.career.termUntil??=0;p.career.raiseDay??=-1;p.career.referral??=null;return p.career;}
@@ -40,6 +41,7 @@
     const previous=p.jobId;p.jobId=b.id;if(!b.ownerId)b.ownerId=p.id;
     const referral=p.knowledge[b.id]?.recommendedBy;
     c.job=b.id;c.since=s.day;c.apprentice=apprentice;c.training=0;c.changes++;c.contractRate=b.wage*(apprentice?.7:1);c.termUntil=s.day+6;c.referral=referral&&s.now-referral.at<10080?referral.id:null;c.history.unshift({day:s.day,from:previous,to:b.id,apprentice});c.history=c.history.slice(0,8);
+    Personality.event(s,p,'success',b.ownerId||null,'Принят '+(apprentice?'учеником':'на работу')+' в «'+b.name+'»',14);
     return{ok:true,apprentice};
   }
   function raise(s,p,b){

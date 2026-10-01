@@ -25,7 +25,7 @@ test('помощь и наставничество требуют встречи
  const{s,p,q}=meet();p.mind.personality.empathy=.9;q.coins=2;const before=total(s);C.encounter(s,p,q);close(total(s),before);assert.ok(q.coins>2);assert.ok(s.civic.totals.aid>0);
  s.day++;p.skill=5;q.skill=1;q.coins=50;p.mind.personality.curiosity=.9;C.encounter(s,p,q);assert.ok(q.skill>1);assert.equal(s.civic.totals.mentoring,1);q.location='hall';const n=s.civic.totals.meetings;C.encounter(s,p,q);assert.equal(s.civic.totals.meetings,n);
 });
-test('примирение снижает враждебность вместо фиктивной дружбы',()=>{const{s,p,q}=meet();p.mind.personality.empathy=.9;p.relationships[q.id]=-40;q.relationships[p.id]=-40;C.encounter(s,p,q);assert.ok(p.relationships[q.id]>-40&&p.relationships[q.id]<0);assert.equal(s.civic.totals.reconciled,1);});
+test('примирение снижает враждебность вместо фиктивной дружбы',()=>{const{s,p,q}=meet();p.mind.personality.empathy=.9;Object.assign(p.character.values,{honesty:.9,justice:.2,familyLoyalty:.3});p.relationships[q.id]=-40;q.relationships[p.id]=-40;C.encounter(s,p,q);assert.ok(p.relationships[q.id]>-40&&p.relationships[q.id]<0);assert.equal(s.civic.totals.reconciled,1);});
 test('банды не существуют заранее и формируются из встретившихся знакомых повторных нарушителей',()=>{
  const{s,p,q}=meet();assert.equal(s.civic.groups.length,0);p.civic.offences=q.civic.offences=2;p.relationships[q.id]=q.relationships[p.id]=40;C.encounter(s,p,q);assert.equal(s.civic.groups.length,1);assert.equal(p.civic.gangId,q.civic.gangId);const g=s.civic.groups[0];assert.deepEqual(clone(s).civic,s.civic);s.die(q,'умер от болезни');s.day++;C.daily(s);assert.equal(g.active,false);assert.equal(q.civic.gangId,null);assert.equal(p.civic.gangId,null);assert.doesNotThrow(()=>clone(s));
 });

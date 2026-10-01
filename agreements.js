@@ -3,6 +3,7 @@
   const node=typeof module!=='undefined'&&module.exports;
   const Social=node?require('./social-life.js'):root.DanzigSocial,Mind=node?require('./citizen-mind.js'):root.DanzigMind;
   const Households=node?require('./households.js'):root.DanzigHouseholds;
+  const Personality=node?require('./personality.js'):root.DanzigPersonality;
   const LABELS={loan:'Заём у знакомого',venture:'Партнёрский вклад',supply:'Поставка с предоплатой'};
   const STATUS={proposed:'Обсуждается',active:'Действует',overdue:'Просрочен',fulfilled:'Исполнен',declined:'Отказ',cancelled:'Отменён',closed:'Завершён с убытком'};
   const live=a=>['proposed','active','overdue'].includes(a.status),clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
@@ -51,7 +52,7 @@
     const amount=Math.min(a.remaining,Math.max(0,p.coins-12));if(amount<=0)return{ok:false,message:'Нужно оставить средства на жизнь.'};
     p.coins-=amount;q.coins+=amount;a.paid+=amount;a.remaining=Math.max(0,a.remaining-amount);ensure(s).repaid+=amount;
     Social.change(s,q,p,3,`${p.name} вернул ${amount.toFixed(1)} тал. по договорённости`);
-    if(a.remaining<1e-7){p.reputation=Math.min(100,p.reputation+1);complete(s,a,`${p.name} полностью вернул заём ${q.name}.`);}return{ok:true};
+    if(a.remaining<1e-7){Personality.event(s,p,'repaid',q.id,'Полностью исполнил обещание перед '+q.name,12);p.reputation=Math.min(100,p.reputation+1);complete(s,a,`${p.name} полностью вернул заём ${q.name}.`);}return{ok:true};
   }
   function candidates(s,p,addChoice,step){
     if(p.absence||p.age<16)return;const book=ensure(s);
@@ -104,7 +105,7 @@
       if(!q?.alive){const heir=q&&s.alive.find(x=>x.id===q.spouseId||x.parents.includes(q.id));if(heir){a.lenderId=heir.id;q=heir;}else{a.status='closed';continue;}}
       if(a.kind==='loan'){
         if(!p?.alive){const amount=Math.min(a.remaining,p?.coins||0);if(p)p.coins-=amount;q.coins+=amount;a.paid+=amount;a.remaining-=amount;book.repaid+=amount;a.status=a.remaining<1e-7?'fulfilled':'closed';continue;}
-        if(s.day>a.due+2&&!a.notified){a.notified=true;a.status='overdue';book.defaults++;p.reputation=Math.max(0,p.reputation-3);Social.change(s,q,p,-18,`${p.name} просрочил обещанный возврат`);record(s,a,`${p.name} не вернул заём ${q.name} в срок. Осталось ${a.remaining.toFixed(1)} тал.; отношения ухудшились.`,'conflict');}
+        if(s.day>a.due+2&&!a.notified){a.notified=true;a.status='overdue';Personality.event(s,q,'betrayal',p.id,'Не дождался обещанного возврата от '+p.name,18);book.defaults++;p.reputation=Math.max(0,p.reputation-3);Social.change(s,q,p,-18,`${p.name} просрочил обещанный возврат`);record(s,a,`${p.name} не вернул заём ${q.name} в срок. Осталось ${a.remaining.toFixed(1)} тал.; отношения ухудшились.`,'conflict');}
       }else{
         const b=s.building(a.buildingId);if(!b){a.status='closed';continue;}
         const free=Math.max(0,b.cash-Math.max(30,b.wage*(s.workers(b.id).length+1)*12)),profit=Math.max(0,b.enterprise?.lastProfit||0),payment=Math.min(free,profit*a.share,a.cap-a.paid);

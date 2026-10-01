@@ -1,7 +1,7 @@
 (function(root){
   'use strict';
   const node=typeof module!=='undefined'&&module.exports,S=node?require('./social-life.js'):root.DanzigSocial,H=node?require('./households.js'):root.DanzigHouseholds;
-  const L=node?require('./learning.js'):root.DanzigLearning;
+  const L=node?require('./learning.js'):root.DanzigLearning,P=node?require('./personality.js'):root.DanzigPersonality;
   const clamp=(x,a=0,b=100)=>Math.max(a,Math.min(b,x)),finite=n=>Number.isFinite(n)&&n>=0;
   const motives={need:'Нужда: семье не хватает средств на жизнь',greed:'Корысть: быстрый доход кажется привлекательнее честного заработка',revenge:'Месть за личный конфликт',gang:'Давление сообщников и надежда на их поддержку'};
   const labels={aid:'Взаимопомощь',mentor:'Наставничество',reconcile:'Примирение',company:'Совместный досуг',quarrel:'Ссора',theft:'Кража',brawl:'Драка',gang:'Уличная компания',justice:'Решение стражи',service:'Общественные работы'};
@@ -10,7 +10,7 @@
   const present=(s,p)=>p?.alive&&!p.absence&&!p.arriving&&!p.relocation&&p.location&&!p.path.length;
   const together=(s,p,q)=>p?.id!==q?.id&&present(s,p)&&present(s,q)&&p.location===q.location;
   const group=(s,p)=>s.civic.groups.find(g=>g.id===person(p).gangId&&g.active);
-  function note(s,kind,p,q,text,important=false){const v=ensure(s);v.history.unshift({at:s.now,day:s.day,kind,personId:p.id,otherId:q?.id??null,text});v.history=v.history.slice(0,80);s.log(text,kind==='theft'||kind==='brawl'?'conflict':kind==='justice'?'politics':'friendship',p.id,{title:labels[kind],buildingId:p.location||p.homeId,importance:important?'major':'normal'});}
+  function note(s,kind,p,q,text,important=false){const v=ensure(s);if(['aid','reconcile'].includes(kind)){P.event(s,p,kind,q?.id??null,text,12);if(q)P.event(s,q,kind==='aid'?'help':'reconcile',p.id,text,12);}if(kind==='quarrel'&&q)P.event(s,q,'conflict',p.id,text,10);v.history.unshift({at:s.now,day:s.day,kind,personId:p.id,otherId:q?.id??null,text});v.history=v.history.slice(0,80);s.log(text,kind==='theft'||kind==='brawl'?'conflict':kind==='justice'?'politics':'friendship',p.id,{title:labels[kind],buildingId:p.location||p.homeId,importance:important?'major':'normal'});}
   function gangMeeting(s,p,q){
     if(!together(s,p,q))return;
     const v=ensure(s),a=person(p),b=person(q);if(p.age<18||q.age<18||a.offences<2||b.offences<2||S.trust(s,p,q)<20)return;
@@ -25,7 +25,7 @@
     a.nextMeeting=b.nextMeeting=s.now+480;const v=ensure(s),x=p.mind.personality,y=q.mind.personality;v.totals.meetings++;
     const donor=p.coins>=q.coins?p:q,recipient=donor===p?q:p,d=donor.mind.personality;
     if(d.empathy>.55&&recipient.coins<15&&donor.coins>75&&H.budget(s,donor).coins>H.budget(s,donor).reserve+20){const amount=Math.min(8,Math.max(2,(donor.coins-60)*.08));donor.coins-=amount;recipient.coins+=amount;S.change(s,donor,recipient,12,'Помог деньгами в трудный день');v.totals.aid+=amount;note(s,'aid',donor,recipient,`${donor.name} помогает ${recipient.name}: ${amount.toFixed(1)} тал. из собственных сбережений.`);}
-    else if(S.trust(s,p,q)<0&&(x.empathy>.6||y.empathy>.7)){S.change(s,p,q,14,'Попытались разобраться в старой ссоре');v.totals.reconciled++;note(s,'reconcile',p,q,`${p.name} и ${q.name} поговорили о прежней ссоре. Враждебность ослабла.`);}
+    else if(S.trust(s,p,q)<0){const reaction=P.conflict(s,p,q),peace=['family','reconcile'].includes(reaction.kind);S.change(s,p,q,peace?14:reaction.kind==='bargain'?3:-2,reaction.reason);if(peace)v.totals.reconciled++;P.event(s,p,'conflict',q.id,reaction.reason+': '+q.name,peace?0:8);note(s,peace?'reconcile':'quarrel',p,q,`${p.name}: ${reaction.reason.toLowerCase()}. Собеседник — ${q.name}.`);}
     else if(Math.abs(p.skill-q.skill)>.7&&Math.max(x.curiosity,y.curiosity)>.55){const teacher=p.skill>q.skill?p:q,student=teacher===p?q:p;student.skill=Math.min(10,student.skill+.025);S.change(s,student,teacher,6,'Получил совет опытного ремесленника');v.totals.mentoring++;note(s,'mentor',teacher,student,`${teacher.name} делится ремесленным опытом с ${student.name}.`);}
     else if(p.traits.includes('Вспыльчивый')&&p.mood<50){S.change(s,p,q,-12,'Ссора из-за раздражения');note(s,'quarrel',p,q,`${p.name} сорвался на ${q.name}: раздражение усилило личный конфликт.`);}
     else{S.change(s,p,q,5,'Провели время вместе');p.social=clamp(p.social+5);q.social=clamp(q.social+5);if(s.random()<.18)note(s,'company',p,q,`${p.name} и ${q.name} провели время вместе в «${s.building(p.location).name}».`);}
@@ -57,13 +57,14 @@
     else{v.totals.brawls++;q.health=clamp(q.health-4);p.health=clamp(p.health-2);}
     const reported=!success||m.kind==='brawl'||witnesses.length>0||s.random()<.55;
     const c={id:v.nextId++,actorId:p.id,victimId:q.id,kind:m.kind,motive:m.motive,buildingId:p.location,day:s.day,at:s.now,amount,recovered:0,fine:0,witnesses,reported,status:'open',resolvedDay:null};v.cases.unshift(c);v.cases=[...v.cases.filter(c=>c.status==='open'),...v.cases.filter(c=>c.status!=='open').slice(0,60)];
+    if(success)P.event(s,q,'victim',p.id,(m.kind==='theft'?'Пострадал от кражи: ':'Пострадал в драке: ')+p.name,24);
     if(reported){a.heat=clamp(a.heat+15);S.change(s,q,p,-25,'Подозрение в правонарушении');q.civic.fear=clamp(q.civic.fear+18);}
     note(s,m.kind,p,q,`${p.name}: ${m.kind==='theft'?success?'украл '+amount.toFixed(1)+' тал. у '+q.name:'попытался обокрасть '+q.name:'затеял драку с '+q.name}. Мотив: ${motives[m.motive].toLowerCase()}. ${reported?'Стража получила сообщение.':'Свидетелей не нашлось.'}`,true);
     return{ok:success,message:success?'Правонарушение совершено; сохраняется риск расследования.':'Попытку заметили.'};
   }
   function sentence(s,c){
     const v=ensure(s),p=s.person(c.actorId),q=s.person(c.victimId);if(c.status!=='open'||!p?.alive)return false;
-    c.status='solved';c.resolvedDay=s.day;v.totals.solved++;const a=person(p),refund=q?.alive?Math.min(c.amount,Math.max(0,p.coins-12)):0;p.coins-=refund;if(q)q.coins+=refund;c.recovered=refund;v.totals.recovered+=refund;
+    P.event(s,p,'punished',q?.id??null,'Наказание за правонарушение',22);c.status='solved';c.resolvedDay=s.day;v.totals.solved++;const a=person(p),refund=q?.alive?Math.min(c.amount,Math.max(0,p.coins-12)):0;p.coins-=refund;if(q)q.coins+=refund;c.recovered=refund;v.totals.recovered+=refund;
     const due=c.kind==='brawl'?12:8,fine=Math.min(due,Math.max(0,p.coins-12));p.coins-=fine;if(fine)s.changeTreasury(fine,'crimeFines');c.fine=fine;v.totals.fines+=fine;a.fineDue+=due-fine;a.service+=c.kind==='brawl'?180:90;a.heat=clamp(a.heat+12);p.reputation=clamp(p.reputation-8);
     s.remember(p,'punishment','hall','Стража раскрыла правонарушение: штраф и общественные работы.',-10);L.observe(s,p,{goal:'civicOffence',title:'Риск правонарушения',steps:[]},false,'Расследование завершилось наказанием');
     note(s,'justice',p,q,`${p.name}: дело раскрыто. Возмещено ${refund.toFixed(1)} тал., уплачено штрафа ${fine.toFixed(1)} из ${due}; назначены общественные работы.`,true);return true;

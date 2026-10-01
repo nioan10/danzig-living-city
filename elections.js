@@ -1,6 +1,7 @@
 (function(root){
   'use strict';
   const node=typeof module!=='undefined'&&module.exports,Social=node?require('./social-life.js'):root.DanzigSocial;
+  const Personality=node?require('./personality.js'):root.DanzigPersonality;
   const TERM=24,DAY=1440;
   const living=(s,id)=>{const p=s.person(id);return p?.alive&&!p.absence&&p.age>=18?p:null;};
   const level=s=>s.building('hall').development?.level||1;
@@ -15,7 +16,8 @@
   function eligible(s,p,key){return !!(p?.alive&&!p.absence&&p.age>=25&&(!seat(s,p)||rank(s,seat(s,p))>=rank(s,key)));}
   function preference(s,voter,candidate,key){
     const v=voter.mind?.personality||{},c=candidate.mind?.personality||{},trust=Social.trust(s,voter,candidate),kin=Social.kin(voter,candidate),fit=key==='treasurer'?(c.thrift||.5):key==='judge'?(c.empathy||.5):key==='captain'?(c.diligence||.5):(c.ambition||.5);
-    const factors=[{name:'Доверие',value:trust*.55},{name:'Семейная лояльность',value:kin?(v.family||.5)*28:0},{name:'Известная репутация',value:candidate.reputation*.18},{name:'Подход к обязанностям',value:fit*14},{name:'Сходство взглядов',value:(1-Math.abs((v.thrift||.5)-(c.thrift||.5)))*9}];
+    const factors=[{name:'Доверие',value:trust*.55},{name:'Семейная лояльность',value:kin?(voter.character?.values.familyLoyalty??v.family??.5)*28:0},{name:'Известная репутация',value:candidate.reputation*.18},{name:'Подход к обязанностям',value:fit*14},{name:'Сходство взглядов',value:(1-Math.abs((v.thrift||.5)-(c.thrift||.5)))*9}];
+    if(voter.character&&candidate.character)factors.push({name:'Сходство ценностей',value:(1-Math.abs(voter.character.values.justice-candidate.character.values.justice))*8},{name:'Доверие к честности',value:candidate.character.values.honesty*voter.character.values.justice*9});
     if(voter.id===candidate.id)factors.push({name:'Собственные амбиции',value:(v.ambition||.5)*12});
     return {score:factors.reduce((n,f)=>n+f.value,0),reason:factors.sort((a,b)=>b.value-a.value).slice(0,2).map(f=>f.name).join(', ')};
   }
@@ -25,6 +27,7 @@
     if(key==='mayor'){const old=s.person(s.mayorId);if(old&&old.id!==p.id&&old.jobId==='hall'){old.jobId=null;old.role='Ищет ремесло';old.plan=null;}s.mayorId=p.id;p.jobId='hall';p.role='Бургомистр';p.plan=null;g.mayorSeat={personId:p.id,sinceDay:s.day,acting};}
     else g.offices[key]={personId:p.id,sinceDay:s.day,acting,decision:g.offices[key]?.decision||null};
     v.next[key]=s.day+(acting?4:TERM);s.recordGovernment(key,p,acting?'Временное исполнение до выборов.':'Получен мандат после личного голосования выборщиков.');
+    if(!acting)Personality.event(s,p,'success',p.id,'Избран на должность: '+(specs()[key]?.name||'Бургомистр'),20);
   }
   function caretaker(s,key){
     const g=s.government,v=ensure(s),ids=electors(s,key),voter=ids.map(id=>living(s,id)).find(Boolean)||keys(s).map(k=>holder(s,k)).find(Boolean)||s.alive.filter(p=>p.age>=25&&!p.absence).sort((a,b)=>a.id-b.id)[0];

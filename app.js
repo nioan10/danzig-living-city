@@ -117,7 +117,11 @@
     if(!force&&!changed&&(tab==='summary'&&panel.scrollTop>48||['people-search','tax'].includes(document.activeElement?.id)||lotId&&!sim.building(lotId)||document.activeElement?.closest('#panel form')))return;
     const top=changed?0:panel.scrollTop,scroll={};for(const e of panel.querySelectorAll('.people-list,.build-list'))scroll[e.className]=e.scrollTop;
     const html=tab==='summary'?renderSummary():tab==='people'?renderPeople():tab==='buildings'?renderBuildings():tab==='city'?renderCity():renderLog();
-    if(panel.innerHTML!==html)panel.innerHTML=html;
+    if(panel._renderedHTML!==html){
+      const opened=changed?new Set():new Set([...panel.querySelectorAll('details[data-disclosure][open]')].map(e=>e.dataset.disclosure));
+      panel.innerHTML=html;panel._renderedHTML=html;
+      for(const e of panel.querySelectorAll('details[data-disclosure]'))e.open=opened.has(e.dataset.disclosure);
+    }
     panel.dataset.view=key;panel.scrollTop=top;
     for(const e of panel.querySelectorAll('.people-list,.build-list'))e.scrollTop=changed?0:scroll[e.className]||0;
     if(tab==='summary')renderedFeedIds=new Set(sim.events.map(e=>e.id));feedNotice();

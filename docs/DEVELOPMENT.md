@@ -8,6 +8,7 @@
 |---|---|---|
 | Потребности, действия, демография, загрузка | `sim.js`, `brain.js`; посильные партии сырья — `supplyAmount` | `quick` |
 | Интеллект 2.0: личность, семья, контекстная память, поиск работы и планирование | `citizen-mind.js`, `labour.js`, `citizen-planner.js`; интеграция `brain.js`, `sim.js`, `learning.js` | `node --test tests/intelligence.test.cjs`, затем `full` |
+| Ценности, переживания, биография, прозвища и новые имена | `personality.js`, `names.js`, `personality-view.js`; события в `civic-life.js`, `agreements.js`, `labour.js`, `elections.js`, `sim.js`; имена переселенцев в `expansion.js` | `node --test tests/personality.test.cjs tests/civic-life.test.cjs tests/elections.test.cjs`, затем `full` + карточка жителя |
 | Причины решений жителей и обзор труда | `mind-view.js`, `mind.css`; подключения `app.js`, `dashboard.js` | `syntax` + браузер |
 | Длительные намерения, связи, слухи и договорённости | `intentions.js`, `social-life.js`, `agreements.js`; интеграция `sim.js`, `brain.js`, `labour.js`, `commerce.js` | `node --test tests/society.test.cjs`, затем `full` |
 | Социальные встречи, мотивы преступлений, компании, стража и наказания | `civic-life.js`, `civic-view.js`; интеграция `sim.js`, `brain.js`, `learning.js`, `government.js`, `society-view.js`; разовые штрафы исключены из прогноза казны | `node --test tests/civic-life.test.cjs`, затем `full` + браузер |

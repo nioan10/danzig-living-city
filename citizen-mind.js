@@ -2,6 +2,7 @@
   'use strict';
   const Intentions=typeof module!=='undefined'&&module.exports?require('./intentions.js'):root.DanzigIntentions;
   const Households=typeof module!=='undefined'&&module.exports?require('./households.js'):root.DanzigHouseholds;
+  const Personality=typeof module!=='undefined'&&module.exports?require('./personality.js'):root.DanzigPersonality;
   const clamp=(n,a=0,b=1)=>Math.max(a,Math.min(b,n));
   const LABELS={diligence:'Трудолюбие',ambition:'Амбиции',caution:'Осторожность',thrift:'Бережливость',family:'Забота о семье',sociability:'Общительность',loyalty:'Верность делу',empathy:'Сочувствие',curiosity:'Любознательность'};
   const GOALS={security:'Обеспечить запас на три дня',mastery:'Стать мастером своего ремесла',enterprise:'Накопить на собственное дело',standing:'Заслужить уважение горожан',home:'Улучшить условия семьи'};
@@ -90,6 +91,7 @@
     add(Intentions.bias(p,goal),'Следую выбранному способу достижения цели');
     const first=steps[0],kind=['work','hire'].includes(first.kind)?'employment':['buyFood','pickup'].includes(first.kind)?'trade':null;
     if(kind)add(context(s,p,first.target,kind)*(v.caution+.5),'Опыт именно с этим двором');
+    const personal=Personality.bias(p,goal);score+=personal.score;why.push(...personal.why);
     return{score,why};
   }
   function finished(s,p,plan,success){
