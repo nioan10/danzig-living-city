@@ -1,14 +1,17 @@
 (function(root){
   'use strict';
+  const Elections=typeof module!=='undefined'&&module.exports?require('./elections.js'):root.DanzigElections;
   const OFFICES={
-    treasurer:{name:'Казначей',level:2,power:'Налоги, сбор с дворов и ежедневный план расходов',trait:'Бережливый'},
+    treasurer:{name:'Казначей',level:1,power:'Налоги, сбор с дворов и ежедневный план расходов',trait:'Бережливый'},
+    judge:{name:'Судья',level:1,power:'Заседания, доказательства, решения и исполнение судебных дел',trait:'Добрый'},
     seneschal:{name:'Сенешаль',level:2,power:'Строительные разрешения и размер сбора за них',trait:'Амбициозный'},
     captain:{name:'Капитан стражи',level:2,power:'Расходы на стражу и противопожарный дозор',trait:'Трудолюбивый'},
     guildmaster:{name:'Гильдейский мастер',level:3,power:'Налог на прибыль мастерских',trait:'Добрый'},
     port:{name:'Портовый старшина',level:3,power:'Экспортная квота и продовольственный резерв',trait:'Бережливый'}
   };
+  Elections.configure(OFFICES);
   const hallLevel=s=>s.building('hall').development?.level||1;
-  function ensure(s){s.government??={sinceDay:s.day,lastDay:s.day-1,nextElection:s.day,offices:{},manual:{},guard:1,history:[],stipends:0};return s.government;}
+  function ensure(s){s.government??={sinceDay:s.day,lastDay:s.day-1,nextElection:s.day,offices:{},manual:{},guard:1,history:[],stipends:0};Elections.ensure(s);return s.government;}
   function available(s,id){const p=s.person(id);return p?.alive&&!p.absence&&p.age>=18?p:null;}
   function officer(s,key){if(key==='mayor')return available(s,s.mayorId);return available(s,s.government?.offices[key]?.personId)||available(s,s.mayorId);}
   function record(s,key,p,text,announce=true){
@@ -16,31 +19,16 @@
     if(v.offices[key])v.offices[key].decision=row;
     if(announce)s.log(`${OFFICES[key]?.name||'Бургомистр'} ${p?.name||''}: ${text}`,'politics',p?.id,{title:'Решение магистрата',buildingId:'hall'});
   }
-  function appoint(s){
-    const v=ensure(s),term=s.day>=v.nextElection,used=new Set([s.mayorId]);
-    // Existing officeholders keep their seat until the next election; a death or
-    // mobilization creates an immediate vacancy, with a living substitute.
-    for(const [key,spec]of Object.entries(OFFICES)){
-      if(spec.level>hallLevel(s))continue;
-      const old=v.offices[key],holder=old&&available(s,old.personId);
-      if(!term&&holder&&!used.has(holder.id)){used.add(holder.id);continue;}
-      const candidates=s.alive.filter(p=>p.age>=25&&!p.absence&&!used.has(p.id));
-      const score=p=>p.reputation+p.skill*3+(p.traits.includes(spec.trait)?16:0)+(p.traits.includes('Общительный')?5:0)+(key==='guildmaster'&&p.guildId?10:0);
-      candidates.sort((a,b)=>score(b)-score(a)||a.id-b.id);const p=candidates[0];
-      v.offices[key]={personId:p?.id||null,sinceDay:s.day,decision:old?.decision||null};
-      if(p){used.add(p.id);if(old?.personId!==p.id)record(s,key,p,'Совет поручил должность. Полномочия: '+spec.power+'.');}
-    }
-    if(term)v.nextElection=s.day+12;
-  }
+  function appoint(s){ensure(s);Elections.appoint(s);}
   function daily(s){
-    const v=ensure(s);if(v.lastDay===s.day)return;v.lastDay=s.day;appoint(s);
+    const v=ensure(s);if(v.lastDay===s.day)return;v.lastDay=s.day;Elections.daily(s);
     for(const [key,seat]of Object.entries(v.offices)){
       const p=available(s,seat.personId);if(!p||OFFICES[key].level>hallLevel(s))continue;
       // A part-time council allowance transfers existing city money to a person.
       const stipend=Math.min(.25,Math.max(0,s.treasury-Math.max(80,s.regionBill()+s.region.debt+(s.fiscal.spending?.capital?.balance||0))));
       if(stipend){s.changeTreasury(-stipend,'administration');p.coins+=stipend;v.stipends+=stipend;}
       if(v.manual[key]||seat.decision&&s.now-seat.decision.at<3*1440)continue;
-      if(key==='treasurer')continue; // Finance.daily performs this office's budget review.
+      if(key==='treasurer'||key==='judge')continue; // Finance.daily performs this office's budget review.
       let text='',changed=false;
       if(key==='seneschal'){
         const cash=s.guilds.groups.reduce((n,g)=>n+g.cash,0)/Math.max(1,s.guilds.groups.length),rate=cash<350?3:p.traits.includes('Бережливый')?8:5;
@@ -66,6 +54,8 @@
     if(!Number.isFinite(v.lastDay)||!finite(v.nextElection)||!finite(v.sinceDay)||!finite(v.stipends)||!Number.isFinite(v.guard)||v.guard<.5||v.guard>1.5||!Array.isArray(v.history)||!v.manual||!v.offices)throw Error('Некорректный магистрат');
     for(const[key,seat]of Object.entries(v.offices))if(!OFFICES[key]||seat.personId!==null&&!s.person(seat.personId)||!finite(seat.sinceDay))throw Error('Некорректная городская должность');
     for(const[key,value]of Object.entries(v.manual))if(!OFFICES[key]||typeof value!=='boolean')throw Error('Некорректные полномочия');
+    Elections.load(s);
+    const ids=[s.mayorId,...Object.values(v.offices).map(o=>o.personId)].filter(id=>available(s,id));if(new Set(ids).size!==ids.length)throw Error('Дублирование политических должностей');
   }
-  const api={OFFICES,hallLevel,ensure,officer,record,appoint,daily,setAutonomy,load};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.DanzigGovernment=api;
+  const api={Elections,tick:s=>{ensure(s);Elections.tick(s);},candidates:(s,p,add,step)=>Elections.candidates(s,p,add,step),execute:Elections.execute,OFFICES,hallLevel,ensure,officer,record,appoint,daily,setAutonomy,load};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.DanzigGovernment=api;
 })(typeof window!=='undefined'?window:globalThis);

@@ -21,7 +21,7 @@
 | Цены, квоты и насыщение внешнего рынка, натуральный сбор, предоплата | `commerce.js` | `economy` |
 | Семейные гильдии, заявки в ратушу и конкуренция | `guilds.js`, `guild-view.js`, `guilds.css`; цены в `commerce.js`, цели в `brain.js` | `quick` + браузер |
 | Уровни зданий, дополнительные улучшения, решения владельцев | `development.js`, `development-view.js`, `development.css`; планы в `brain.js`/`sim.js`, вместимость в `housing.js` | `node --test tests/development.test.cjs tests/economy-recovery.test.cjs` + браузер, затем `full` |
-| Должности магистрата, полномочия и смена чиновников | `government.js`; делегированные налоги в `finance.js`, разрешения в `guilds.js` | `node --test tests/development.test.cjs` + браузер, затем `full` |
+| Должности магистрата, полномочия и смена чиновников | `government.js`, `elections.js`, `election-view.js`, `elections.css`; личные бюллетени, ярусы 3/5/7, вакансии и делегированные налоги в `finance.js`, разрешения в `guilds.js` | `node --test tests/development.test.cjs` + браузер, затем `full` |
 | Стройка и приглашение переселенцев | `expansion.js`, участки в `world.js` | `economy` |
 | Сословия, земельная аренда, теснота и переезды семей | `housing.js`, ставки и кварталы `town-layout.js`, `district-view.js`; интеграция `sim.js`, `households.js`, `property-tax.js` | `node --test tests/city-policy.test.cjs`, затем `full` + браузер |
 | Простые / городские дома и дворянские поместья, цены и доступ к жилью | `residences.js`, `housing.js`, `expansion.js`; сметы в `Expansion.options`, классы в `civic-view.js`, `map-plan.js`, множители в `development.js`/`property-tax.js` | `node --test tests/residences.test.cjs tests/housing.test.cjs`, затем `full` + браузер |
