@@ -1,0 +1,13 @@
+.map-shell{position:relative;isolation:isolate}
+.map-shell .map-3d-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:-1}
+.map-shell .map-3d-canvas[hidden]{display:none}
+.map-shell[data-view="3d"]{background:#bdccb3}
+.map-navigation .map-view-choice{display:flex;gap:2px;padding:3px;border:1px solid #60715b;border-radius:5px}
+.map-view-choice button{border:0;background:transparent;padding:5px 10px}
+.map-view-choice button[aria-pressed="true"]{background:#d6bd80;color:#243c30}
+.map-camera{display:flex;gap:4px}
+.map-camera[hidden]{display:none}
+#map-view-status{flex-basis:100%;margin:0;color:#bbcbb8;font-size:10px;line-height:1.5}
+#map-view-status:empty{display:none}
+#map{touch-action:none}
+@media(max-width:650px){.map-camera{margin-left:auto}.map-navigation .map-scheme-note{flex-basis:100%}.map-shell[data-view="3d"]{min-height:440px}.map-view-choice button{min-height:30px}.map-camera button{min-height:30px}}

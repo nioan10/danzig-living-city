@@ -36,6 +36,7 @@
 | Статистика, формы и их оформление | `dashboard.js`, `finance-view.js`, `dashboard.css` | `syntax` + браузер |
 | История показателей, графики, периоды и распределения | `analytics.js`, `statistics-view.js`, `statistics.css`; сэмплирование и расход сырья в `sim.js` | `node --test tests/analytics.test.cjs`, затем `full` + браузер |
 | Завершение, архив итогов, поколения и отчёт | `report.js`, `report-view.js`, `report.css`; остановка в `sim.js`/`app.js` | `quick` + браузер |
+| 3D-модели, камера, выбор объёмов и переключение вида | `map-3d-geometry.js` (геометрия и проекция), `map-3d-models.js` (процедурные модели), `map-3d.js` (WebGL и подписи), `map-3d.css`; интеграция `map-painted.js`, `app.js`, `index.html` | `node --test tests/map-3d.test.cjs` + `syntax`; браузер: 3D/схема, поворот, выбор, стройка, узкий экран, восстановление контекста |
 | Схематическая карта | `map-painted.js` (canvas и взаимодействия), `map-plan.js`/`map-plan.css`, `map-art.js`; иллюстрация больше не подключена | `syntax` + браузер; `systems` для геометрии |
 | Команды разработки | `tools/check.cjs`, `tests/check.test.cjs` | `tooling` |
 
