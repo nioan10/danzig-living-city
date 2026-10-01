@@ -2,6 +2,7 @@
   'use strict';
   const node=typeof module!=='undefined'&&module.exports,S=node?require('./social-life.js'):root.DanzigSocial,H=node?require('./households.js'):root.DanzigHouseholds;
   const L=node?require('./learning.js'):root.DanzigLearning,P=node?require('./personality.js'):root.DanzigPersonality;
+  const Court=node?require('./court.js'):root.DanzigCourt;
   const clamp=(x,a=0,b=100)=>Math.max(a,Math.min(b,x)),finite=n=>Number.isFinite(n)&&n>=0;
   const motives={need:'Нужда: семье не хватает средств на жизнь',greed:'Корысть: быстрый доход кажется привлекательнее честного заработка',revenge:'Месть за личный конфликт',gang:'Давление сообщников и надежда на их поддержку'};
   const labels={aid:'Взаимопомощь',mentor:'Наставничество',reconcile:'Примирение',company:'Совместный досуг',quarrel:'Ссора',theft:'Кража',brawl:'Драка',gang:'Уличная компания',justice:'Решение стражи',service:'Общественные работы'};
@@ -56,27 +57,21 @@
     let amount=0;if(m.kind==='theft'){v.totals.thefts++;if(success){amount=Math.min(12,Math.max(0,q.coins-12),3+p.mind.personality.ambition*7);q.coins-=amount;p.coins+=amount;v.totals.stolen+=amount;const g=group(s,p),mate=g&&s.occupants(p.location).find(r=>r.id!==p.id&&g.members.includes(r.id)&&present(s,r));if(mate){const share=amount*.25;p.coins-=share;mate.coins+=share;g.lastAt=s.now;}}}
     else{v.totals.brawls++;q.health=clamp(q.health-4);p.health=clamp(p.health-2);}
     const reported=!success||m.kind==='brawl'||witnesses.length>0||s.random()<.55;
-    const c={id:v.nextId++,actorId:p.id,victimId:q.id,kind:m.kind,motive:m.motive,buildingId:p.location,day:s.day,at:s.now,amount,recovered:0,fine:0,witnesses,reported,status:'open',resolvedDay:null};v.cases.unshift(c);v.cases=[...v.cases.filter(c=>c.status==='open'),...v.cases.filter(c=>c.status!=='open').slice(0,60)];
+    const c={id:v.nextId++,actorId:p.id,victimId:q.id,kind:m.kind,motive:m.motive,buildingId:p.location,day:s.day,at:s.now,amount,recovered:0,fine:0,witnesses,reported,status:'open',resolvedDay:null};v.cases.unshift(c);const pending=c=>c.status==='open'||s.court?.cases.some(x=>x.kind==='crime'&&x.sourceId===c.id&&x.status!=='closed');v.cases=[...v.cases.filter(pending),...v.cases.filter(c=>!pending(c)).slice(0,60)];
     if(success)P.event(s,q,'victim',p.id,(m.kind==='theft'?'Пострадал от кражи: ':'Пострадал в драке: ')+p.name,24);
     if(reported){a.heat=clamp(a.heat+15);S.change(s,q,p,-25,'Подозрение в правонарушении');q.civic.fear=clamp(q.civic.fear+18);}
     note(s,m.kind,p,q,`${p.name}: ${m.kind==='theft'?success?'украл '+amount.toFixed(1)+' тал. у '+q.name:'попытался обокрасть '+q.name:'затеял драку с '+q.name}. Мотив: ${motives[m.motive].toLowerCase()}. ${reported?'Стража получила сообщение.':'Свидетелей не нашлось.'}`,true);
     return{ok:success,message:success?'Правонарушение совершено; сохраняется риск расследования.':'Попытку заметили.'};
   }
-  function sentence(s,c){
-    const v=ensure(s),p=s.person(c.actorId),q=s.person(c.victimId);if(c.status!=='open'||!p?.alive)return false;
-    P.event(s,p,'punished',q?.id??null,'Наказание за правонарушение',22);c.status='solved';c.resolvedDay=s.day;v.totals.solved++;const a=person(p),refund=q?.alive?Math.min(c.amount,Math.max(0,p.coins-12)):0;p.coins-=refund;if(q)q.coins+=refund;c.recovered=refund;v.totals.recovered+=refund;
-    const due=c.kind==='brawl'?12:8,fine=Math.min(due,Math.max(0,p.coins-12));p.coins-=fine;if(fine)s.changeTreasury(fine,'crimeFines');c.fine=fine;v.totals.fines+=fine;a.fineDue+=due-fine;a.service+=c.kind==='brawl'?180:90;a.heat=clamp(a.heat+12);p.reputation=clamp(p.reputation-8);
-    s.remember(p,'punishment','hall','Стража раскрыла правонарушение: штраф и общественные работы.',-10);L.observe(s,p,{goal:'civicOffence',title:'Риск правонарушения',steps:[]},false,'Расследование завершилось наказанием');
-    note(s,'justice',p,q,`${p.name}: дело раскрыто. Возмещено ${refund.toFixed(1)} тал., уплачено штрафа ${fine.toFixed(1)} из ${due}; назначены общественные работы.`,true);return true;
-  }
+  function sentence(s,c){Court.fromCrime(s,c);return false;}
   function daily(s){
     const v=ensure(s);if(v.lastDay>=s.day||s.conclusion)return;v.lastDay=s.day;
     for(const p of s.alive){const a=person(p);a.heat=Math.max(0,a.heat-.8);a.fear=Math.max(0,a.fear-3);const payment=Math.min(a.fineDue,Math.max(0,p.coins-60),2);if(payment){p.coins-=payment;a.fineDue-=payment;s.changeTreasury(payment,'crimeFines');v.totals.fines+=payment;}}
-    for(const c of v.cases.filter(c=>c.status==='open'&&s.day>c.day)){const p=s.person(c.actorId);if(!p.alive||s.day-c.day>10){c.status='closed';c.resolvedDay=s.day;continue;}if(c.reported&&!p.absence&&s.random()<clamp(.1*(s.government.guard||1)+c.witnesses.length*.09,.05,.65))sentence(s,c);}
+    for(const c of v.cases.filter(c=>c.status==='open'&&s.day>c.day)){const p=s.person(c.actorId);if(c.courtId)continue;if(!p.alive||s.day-c.day>10){c.status='closed';c.resolvedDay=s.day;continue;}if(c.reported&&!p.absence&&s.random()<clamp(.1*(s.government.guard||1)+c.witnesses.length*.09,.05,.65))Court.fromCrime(s,c);}
     for(const g of v.groups.filter(g=>g.active)){const members=g.members.map(id=>s.person(id)),live=members.filter(p=>p?.alive);for(const p of members)if(p&&!p.alive)person(p).gangId=null;g.members=live.map(p=>p.id);if(live.length<2||s.now-g.lastAt>30*1440){g.active=false;for(const p of live)person(p).gangId=null;}else if(!live.some(p=>p.id===g.leaderId))g.leaderId=live[0].id;}
     v.days.push({day:s.day,thefts:v.totals.thefts,brawls:v.totals.brawls,solved:v.totals.solved,aid:v.totals.aid,meetings:v.totals.meetings});v.days=v.days.slice(-90);
   }
-  function load(s){const v=ensure(s);if(v.version!==1||!['sinceDay','lastDay','nextId','nextGang'].every(k=>finite(v[k]))||v.lastDay>s.day||!Object.values(v.totals).every(finite)||!Array.isArray(v.cases)||v.cases.length>100||!Array.isArray(v.groups)||v.groups.length>24||!Array.isArray(v.history)||v.history.length>80||!Array.isArray(v.days)||v.days.length>90)throw Error('Некорректная социальная жизнь');
+  function load(s){const v=ensure(s);if(v.version!==1||!['sinceDay','lastDay','nextId','nextGang'].every(k=>finite(v[k]))||v.lastDay>s.day||!Object.values(v.totals).every(finite)||!Array.isArray(v.cases)||v.cases.length>160||!Array.isArray(v.groups)||v.groups.length>24||!Array.isArray(v.history)||v.history.length>80||!Array.isArray(v.days)||v.days.length>90)throw Error('Некорректная социальная жизнь');
     if(!Number.isInteger(v.nextId)||!Number.isInteger(v.nextGang)||v.nextId<=Math.max(0,...v.cases.map(c=>c.id))||v.nextGang<=Math.max(0,...v.groups.map(g=>g.id))||v.sinceDay>s.day||!['meetings','aid','mentoring','reconciled','thefts','brawls','stolen','recovered','fines','solved'].every(k=>finite(v.totals[k]))||v.history.some(h=>!labels[h.kind]||!s.person(h.personId)||h.otherId!==null&&!s.person(h.otherId)||!finite(h.at)||h.at>s.now||!finite(h.day)||h.day>s.day||typeof h.text!=='string')||v.days.some(d=>!['day','thefts','brawls','solved','aid','meetings'].every(k=>finite(d[k]))||d.day>s.day))throw Error('Некорректная хроника социальной жизни');
     if(new Set(v.cases.map(c=>c.id)).size!==v.cases.length||v.cases.some(c=>!s.person(c.actorId)||!s.person(c.victimId)||!s.building(c.buildingId)||!['theft','brawl'].includes(c.kind)||!motives[c.motive]||!['open','solved','closed'].includes(c.status)||!['id','at','day','amount','recovered','fine'].every(k=>finite(c[k]))||c.recovered>c.amount||c.day>s.day||typeof c.reported!=='boolean'||!Array.isArray(c.witnesses)||c.witnesses.some(id=>!s.person(id))))throw Error('Некорректное дело стражи');
     for(const g of v.groups)if(!Number.isInteger(g.id)||!s.person(g.leaderId)||typeof g.name!=='string'||typeof g.active!=='boolean'||!finite(g.formed)||!finite(g.lastAt)||!Array.isArray(g.members)||g.members.length>6||new Set(g.members).size!==g.members.length||g.members.some(id=>!s.person(id)))throw Error('Некорректная уличная компания');

@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {Simulation,Finance,World,Housing,Expansion}=require('../sim.js'),B=Finance.Budget;
-const clone=s=>Simulation.fromJSON(JSON.parse(JSON.stringify(s))),sum=o=>Object.values(o||{}).reduce((n,v)=>n+v,0),wealth=s=>s.treasury+sum(s.people.map(p=>p.coins))+sum(s.buildings.map(b=>b.cash)),close=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
+const clone=s=>Simulation.fromJSON(JSON.parse(JSON.stringify(s))),sum=o=>Object.values(o||{}).reduce((n,v)=>n+v,0),wealth=s=>(s.properties?.escrow||0)+s.treasury+sum(s.people.map(p=>p.coins))+sum(s.buildings.map(b=>b.cash)),close=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
 function history(s,income,services=0){s.day=12;s.accounts.days=Array.from({length:12},(_,day)=>({day,income:{sales:income},expenses:{services}}));s.region.nextDay=18;}
 test('богатая казна не оправдывает бездействие при хроническом дефиците',()=>{
  const s=new Simulation();history(s,5,50);s.treasury=5000;for(const t of Object.values(s.fiscal.taxes)){t.enabled=false;t.rate=0;}const before=s.treasury;Finance.daily(s);assert.ok(s.tax>0);assert.ok(s.fiscal.taxes.sales.enabled&&s.fiscal.taxes.export.enabled);assert.match(s.fiscal.lastReview.reason,/не дожидаясь/);assert.ok(s.treasury>=before);

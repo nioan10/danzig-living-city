@@ -22,14 +22,14 @@
     focus(x,y){const p=this.artPoint(x,y);this.zoom=Math.max(1.5,this.zoom);const s=this.fit*this.zoom;const mx=Math.max(0,(W.WIDTH*s-this.width)/2),my=Math.max(0,(W.HEIGHT*s-this.height)/2);this.panX=clamp((W.WIDTH/2-p.x)*s,-mx,mx);this.panY=clamp((W.HEIGHT/2-p.y)*s,-my,my);}
     personPosition(p){return this.positions.get(p.id)||A.personPoint(p);}
     visible(p){const s=this.getSelection();if(p.absence?.status==='away')return false;if(!this.showPeople&&s.person!==p.id)return false;return p.path.length||['market','dock'].includes(p.location)||s.person===p.id&&s.tab==='people';}
-    matches(b){return this.filter==='all'||this.filter===DanzigPlan.category(b);}
+    matches(b){return this.filter==='all'||this.filter==='ownership'||this.filter===DanzigPlan.category(b);}
     focusLot(id){const [x,y]=A.centers[id];this.zoom=Math.max(1.5,this.zoom);const s=this.fit*this.zoom;this.panX=(W.WIDTH/2-x)*s;this.panY=(W.HEIGHT/2-y)*s;}
-    hit(point){for(const h of [...this.labelHits].reverse())if(point.x>=h.x&&point.x<=h.x+h.w&&point.y>=h.y&&point.y<=h.y+h.h)return{kind:h.kind,id:h.id};if(this.showLots&&(this.filter==='all'||this.filter==='land'))for(const l of W.expansionLots){const [x,y]=A.centers[l.id];if(!this.getSim().building(l.id)&&Math.abs(x-point.x)<(l.types.includes('farm')?51:34)&&Math.abs(y-point.y)<(l.types.includes('farm')?33:24))return{kind:'lot',id:l.id};}const sim=this.getSim();let best=null,distance=Math.max(9,6/(this.fit*this.zoom));for(const p of sim.alive){if(!this.visible(p))continue;const at=this.personPosition(p),d=Math.hypot(at.x-point.x,at.y-point.y);if(d<distance){best={kind:'person',id:p.id};distance=d;}}if(best)return best;
+    hit(point){for(const h of [...this.labelHits].reverse())if(point.x>=h.x&&point.x<=h.x+h.w&&point.y>=h.y&&point.y<=h.y+h.h)return{kind:h.kind,id:h.id};if(this.showLots&&(this.filter==='all'||this.filter==='land'||this.filter==='ownership'))for(const l of W.expansionLots){const [x,y]=A.centers[l.id];if(!this.getSim().building(l.id)&&Math.abs(x-point.x)<(l.types.includes('farm')?51:34)&&Math.abs(y-point.y)<(l.types.includes('farm')?33:24))return{kind:'lot',id:l.id};}const sim=this.getSim();let best=null,distance=Math.max(9,6/(this.fit*this.zoom));for(const p of sim.alive){if(!this.visible(p))continue;const at=this.personPosition(p),d=Math.hypot(at.x-point.x,at.y-point.y);if(d<distance){best={kind:'person',id:p.id};distance=d;}}if(best)return best;
       distance=Infinity;for(const b of sim.buildings.filter(b=>this.matches(b))){const [x,y]=A.centers[b.id],dx=Math.abs(x-point.x),dy=Math.abs(y-point.y),d=Math.hypot(dx,dy);if(dx<Math.max(20,b.w*.52)&&dy<Math.max(25,b.h*.65)&&d<distance){best={kind:'building',id:b.id};distance=d;}}return best;
     }
     bind(){const c=this.canvas,tip=document.getElementById('map-tooltip');
       c.addEventListener('pointerdown',e=>{c.setPointerCapture(e.pointerId);this.followId=null;this.drag={x:e.clientX,y:e.clientY,px:this.panX,py:this.panY,moved:false};});
-      c.addEventListener('pointermove',e=>{if(this.drag){const dx=e.clientX-this.drag.x,dy=e.clientY-this.drag.y;if(Math.hypot(dx,dy)>4)this.drag.moved=true;if(this.drag.moved){this.panX=clamp(this.drag.px+dx,-this.width,this.width);this.panY=clamp(this.drag.py+dy,-this.height,this.height);tip.hidden=true;}return;}const p=this.worldPoint(e);this.hover=this.hit(p);tip.hidden=!this.hover;if(this.hover){const sim=this.getSim(),h=this.hover;tip.textContent=h.kind==='person'?sim.person(h.id).name+' · '+(sim.person(h.id).plan?.title||sim.person(h.id).action):h.kind==='lot'?'Участок '+h.id.slice(3)+' · '+W.expansionLots.find(l=>l.id===h.id).types.map(t=>DanzigPlan.names[t]).join(', '):sim.building(h.id).name+' · '+DanzigGuilds.ownerName(sim,sim.building(h.id));tip.style.left=Math.max(8,Math.min(p.sx+12,this.width-240))+'px';tip.style.top=Math.max(8,Math.min(p.sy-35,this.height-48))+'px';}});
+      c.addEventListener('pointermove',e=>{if(this.drag){const dx=e.clientX-this.drag.x,dy=e.clientY-this.drag.y;if(Math.hypot(dx,dy)>4)this.drag.moved=true;if(this.drag.moved){this.panX=clamp(this.drag.px+dx,-this.width,this.width);this.panY=clamp(this.drag.py+dy,-this.height,this.height);tip.hidden=true;}return;}const p=this.worldPoint(e);this.hover=this.hit(p);tip.hidden=!this.hover;if(this.hover){const sim=this.getSim(),h=this.hover;tip.textContent=h.kind==='person'?sim.person(h.id).name+' · '+(sim.person(h.id).plan?.title||sim.person(h.id).action):h.kind==='lot'?'Участок '+h.id.slice(3)+' · '+W.expansionLots.find(l=>l.id===h.id).types.map(t=>DanzigPlan.names[t]).join(', '):sim.building(h.id).name+' · '+(this.filter==='ownership'?DanzigLawPropertyView.ownerName(sim,sim.building(h.id)):DanzigGuilds.ownerName(sim,sim.building(h.id)));tip.style.left=Math.max(8,Math.min(p.sx+12,this.width-240))+'px';tip.style.top=Math.max(8,Math.min(p.sy-35,this.height-48))+'px';}});
       c.addEventListener('pointerup',e=>{if(this.drag&&!this.drag.moved){const hit=this.hit(this.worldPoint(e));if(hit)this.onSelect(hit);}this.drag=null;});
       c.addEventListener('pointercancel',()=>this.drag=null);c.addEventListener('pointerleave',()=>{this.hover=null;tip.hidden=true;});
       c.addEventListener('wheel',e=>{if(!e.ctrlKey)return;e.preventDefault();this.zoomBy(e.deltaY<0?.15:-.15);},{passive:false});
@@ -39,7 +39,7 @@
       const sim=this.getSim(),c=this.ctx;const follow=sim.person(this.followId);if(follow&&follow.absence?.status!=='away'){const p=A.personPoint(follow,this.getSelection().paused?1:sim.remainder/5),scale=this.fit*this.zoom;const maxX=Math.max(0,(W.WIDTH*scale-this.width)/2),maxY=Math.max(0,(W.HEIGHT*scale-this.height)/2);this.panX=clamp((W.WIDTH/2-p.x)*scale,-maxX,maxX);this.panY=clamp((W.HEIGHT/2-p.y)*scale,-maxY,maxY);}else if(follow)this.followId=null;const t=this.transform(),d=Math.min(devicePixelRatio||1,2),sel=this.getSelection();
       c.setTransform(d,0,0,d,0,0);c.fillStyle='#eef2ef';c.fillRect(0,0,this.width,this.height);c.translate(t.x,t.y);c.scale(t.s,t.s);
       DanzigPlan.draw(this,c,sim);
-      if(this.showLots&&(this.filter==='all'||this.filter==='land'))for(const l of W.expansionLots)if(!sim.building(l.id))DanzigPlan.lot(c,l,sel.lot===l.id,t.s,this.filter==='land'||this.zoom>=1.65);
+      if(this.showLots&&(this.filter==='all'||this.filter==='land'||this.filter==='ownership'))for(const l of W.expansionLots)if(!sim.building(l.id))DanzigPlan.lot(c,l,sel.lot===l.id,t.s,this.filter==='land'||this.zoom>=1.65);
       const night=sim.hour>=22||sim.hour<5?.19:sim.hour>=20||sim.hour<7?.08:0;if(night&&this.mode==='art'){c.fillStyle=`rgba(10,22,43,${night})`;c.fillRect(0,0,1600,1100);}
       if(this.routes)for(const e of W.edges)if(!e.expansion||sim.building(e.b.slice(2)))line(c,A.edgePoints(e.a,e.b),'#f6e7b275',1.5/t.s);
       const selected=sel.tab==='people'?sim.person(sel.person):null;
@@ -65,16 +65,16 @@
       this.label(c,e.title,x,y-60,s,true);
     }
     drawLabels(c,s,sel){
-      this.labelHits=[];const sim=this.getSim(),bounds=this.transform(),detail=this.zoom>=1.65||this.filter==='home';
+      this.labelHits=[];const sim=this.getSim(),bounds=this.transform(),detail=this.zoom>=1.65||this.filter==='home'||this.filter==='ownership';
       const landmarks=['hall','market','church','dock','clinic','school','tavern'];
       const rows=sim.buildings.filter(b=>this.matches(b)).map(b=>{
         const selected=sel.tab==='buildings'&&sel.building===b.id,hovered=this.hover?.kind==='building'&&this.hover.id===b.id,home=b.type==='home';
         const number=b.expansion?b.id.slice(3):home?Number(b.id.slice(1))+1:'';
-        return{kind:'building',id:b.id,x:b.x,y:b.y,w:b.w,h:b.h,home,selected,hovered,text:home?'№ '+number:DanzigPlan.shortNames[b.type]||DanzigPlan.names[b.type],color:DanzigPlan.palette[DanzigPlan.category(b)],priority:selected?100:hovered?90:landmarks.includes(b.type)?60-landmarks.indexOf(b.type):home?0:20};
+        return{kind:'building',id:b.id,x:b.x,y:b.y,w:b.w,h:b.h,home,selected,hovered,text:this.filter==='ownership'?DanzigLawPropertyView.mapLabel(sim,b):home?'№ '+number:DanzigPlan.shortNames[b.type]||DanzigPlan.names[b.type],color:DanzigPlan.palette[DanzigPlan.category(b)],priority:selected?100:hovered?90:landmarks.includes(b.type)?60-landmarks.indexOf(b.type):home?0:20};
       }).filter(r=>(this.labels||r.selected||r.hovered)&&(!r.home||detail||r.selected||r.hovered));
       rows.sort((a,b)=>b.priority-a.priority||a.y-b.y||a.x-b.x);
       const occupied=sim.buildings.map(b=>({x:b.x-b.w/2,y:b.y-b.h/2,w:b.w,h:b.h}));
-      if(this.showLots&&(this.filter==='all'||this.filter==='land'))for(const l of W.expansionLots)if(!sim.building(l.id)){const w=l.types.includes('farm')?90:60,h=l.types.includes('farm')?62:42;occupied.push({x:l.x-w/2,y:l.y-h/2,w,h});}
+      if(this.showLots&&(this.filter==='all'||this.filter==='land'||this.filter==='ownership'))for(const l of W.expansionLots)if(!sim.building(l.id)){const w=l.types.includes('farm')?90:60,h=l.types.includes('farm')?62:42;occupied.push({x:l.x-w/2,y:l.y-h/2,w,h});}
       const overlaps=(a,b,pad=0)=>a.x<b.x+b.w+pad&&a.x+a.w>b.x-pad&&a.y<b.y+b.h+pad&&a.y+a.h>b.y-pad;
       const area=Math.min(this.width,W.WIDTH*s)*Math.min(this.height-55,W.HEIGHT*s),budget=Math.max(5,Math.min(28,Math.floor(area/29000)));
       for(const r of rows){

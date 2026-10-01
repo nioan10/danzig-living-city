@@ -4,9 +4,10 @@
   const exempt=new Set(['hall','school','clinic','church','dock']);
   const round=n=>Math.round(n*100)/100;
   function ensure(s){const day=Number.isFinite(s.day)?s.day:0;s.fiscal.property??={sinceDay:day,lastDay:day,nextReview:day+1,enabled:true,auto:s.fiscal.autoMayor!==false,rate:1,assessed:0,paid:0,relief:0,records:{},lastReview:null};return s.fiscal.property;}
-  function owner(s,b){const p=s.person(b.ownerId);return p?.alive&&p.age>=18&&p.homeId===b.id?p:s.living.filter(p=>p.age>=18&&p.homeId===b.id).sort((a,b)=>b.age-a.age||a.id-b.id)[0];}
+  function owner(s,b){if(s.properties){const p=s.propertyOwner(b);return p?.alive&&p.age>=18?p:null;}const p=s.person(b.ownerId);return p?.alive&&p.age>=18&&p.homeId===b.id?p:s.living.filter(p=>p.age>=18&&p.homeId===b.id).sort((a,b)=>b.age-a.age||a.id-b.id)[0];}
   function wallets(s,b){
     if(b.type==='home'){const p=owner(s,b);return p?H.family(s,p).filter(p=>p.alive&&p.age>=18).map(p=>({target:p,key:'coins',reserve:60})):[];}
+    const landlord=s.properties&&s.propertyOwner(b);if(landlord&&landlord.id!==b.ownerId)return[{target:landlord,key:'coins',reserve:60}];
     const r=s.productionRecipe(b),inputs=r?Object.entries(r.inputs).reduce((n,[g,a])=>n+a*s.commerce.prices[g]*4,0):0;
     return[{target:b,key:'cash',reserve:Math.max(30,s.workers(b.id).length*b.wage*8+inputs)}];
   }

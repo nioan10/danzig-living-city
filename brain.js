@@ -88,7 +88,7 @@
       if(sim.festivalDay===sim.day)add('festival','Пойти на городской праздник',social+28,'На площади собираются соседи. Можно отдохнуть вместе',[step('social','market','Побыть на празднике',{duration:80})]);
       add('explore','Узнать городские новости',12+(has('Амбициозный')?8:0),'Посмотрю цены на рынке и поговорю с торговцами',[step('observe',p.id%2?'market':'market2','Осмотреть торговые ряды',{duration:35})]);
     }
-    sim.politicalCandidates?.(p,add,step);sim.titleCandidate?.(p,add,step);Civic.candidates(sim,p,add,step);sim.housingCandidate?.(p,add,step);sim.guildCandidate?.(p,add,step);sim.developmentCandidate?.(p,add,step);
+    sim.courtCandidates?.(p,add,step);sim.politicalCandidates?.(p,add,step);sim.titleCandidate?.(p,add,step);Civic.candidates(sim,p,add,step);sim.housingCandidate?.(p,add,step);sim.guildCandidate?.(p,add,step);sim.developmentCandidate?.(p,add,step);
     sim.eventCandidates?.(p,add,step);
     if(p.age<6)return choices.filter(c=>['eat','rest','aid','shelter','heal'].includes(c.goal));
     return choices.sort((a,b)=>b.score-a.score);

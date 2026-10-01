@@ -46,7 +46,7 @@
     const lowestHunger=Math.min(100,...members.map(q=>q.hunger)),canShop=lowestHunger>=(dependents?45:30)&&(foodDays>=.7||risk>.55&&expectedIncome>=foodExpense&&lowestHunger>55);
     const days=history?members.flatMap(q=>person(q).days.filter(d=>d.day>=s.day-6)):[],received=sum(days.map(d=>d.income)),spent={};
     for(const d of days)for(const [good,value]of Object.entries(d.spending))spent[good]=(spent[good]||0)+value;
-    return {id:head.id,members,adults,home,coins,food,dailyFood,foodDays,foodExpense,fuel,fuelExpense,replacement,expense:foodExpense+fuelExpense+replacement+sum(adults.map(q=>s.housingExpense?.(q)||0)),reserve,spendingFloor,free,limit,received,spent,traits,risk,horizon,expectedIncome,dependents,stress,canShop,
+    return {id:head.id,members,adults,home,coins,food,dailyFood,foodDays,foodExpense,fuel,fuelExpense,replacement,expense:foodExpense+fuelExpense+replacement+(s.propertyRent?.(head)||0)+sum(adults.map(q=>s.housingExpense?.(q)||0)),reserve,spendingFloor,free,limit,received,spent,traits,risk,horizon,expectedIncome,dependents,stress,canShop,
       pottery:sum(members.map(q=>person(q).pottery)),furniture:sum(members.map(q=>person(q).furniture)),fuelStock,
       shopping:members.some(q=>person(q).lastShop===s.day),pending:members.find(q=>q.householdParcel)};
   }
@@ -154,7 +154,7 @@
     if(p.householdParcel){const home=s.building(p.homeId),parcel=p.householdParcel,n=Math.min(parcel.amount,p.bag[parcel.good]||0);home.stock[parcel.good]+=n;p.bag[parcel.good]=Math.max(0,(p.bag[parcel.good]||0)-n);p.householdParcel=null;}invalidate(s);
   }
   function load(s){
-    const h=ensure(s),valid=n=>Number.isFinite(n)&&n>=0,map=(o,keys)=>o&&Object.entries(o).every(([k,n])=>keys.includes(k)&&valid(n)),days=list=>Array.isArray(list)&&list.length<=30&&list.every((d,i)=>valid(d.day)&&d.day<=s.day&&(!i||d.day>list[i-1].day)&&valid(d.income)&&map(d.spending,[...GOODS,'landRent','titleFee'])&&map(d.bought,GOODS)&&(!d.wanted||map(d.wanted,Object.keys(LABELS)))&&(!d.funded||map(d.funded,Object.keys(LABELS))));
+    const h=ensure(s),valid=n=>Number.isFinite(n)&&n>=0,map=(o,keys)=>o&&Object.entries(o).every(([k,n])=>keys.includes(k)&&valid(n)),days=list=>Array.isArray(list)&&list.length<=30&&list.every((d,i)=>valid(d.day)&&d.day<=s.day&&(!i||d.day>list[i-1].day)&&valid(d.income)&&map(d.spending,[...GOODS,'landRent','titleFee','rent','propertyMaintenance'])&&map(d.bought,GOODS)&&(!d.wanted||map(d.wanted,Object.keys(LABELS)))&&(!d.funded||map(d.funded,Object.keys(LABELS))));
     if(h.version!==1||!valid(h.sinceDay)||h.sinceDay>s.day||!valid(h.lastDay)||h.lastDay>s.day||!days(h.days)||!Array.isArray(h.purchases)||h.purchases.length>40||h.purchases.some(r=>!valid(r.at)||r.at>s.now||!s.person(r.personId)||!s.building(r.homeId)||!s.building(r.sellerId)||!GOODS.includes(r.good)||!valid(r.amount)||!valid(r.cost)))throw Error('Некорректная семейная экономика');
     for(const p of s.people){const d=person(p),q=p.householdParcel;if(!['pottery','furniture','warmth','foodStress'].every(k=>valid(d[k]))||d.foodStress>1||d.warmth>100||!Number.isInteger(d.lastShop)||d.lastShop< -1||d.lastShop>s.day||!days(d.days)||q&&(!['wood','clothes','pottery','furniture'].includes(q.good)||!valid(q.amount)||q.amount<=0||q.amount>(p.bag[q.good]||0)+1e-8||q.recipient!==null&&!s.person(q.recipient)||!s.person(q.ownerId)))throw Error('Некорректное имущество семьи');}
     for(const p of s.people)for(const x of p.plan?.steps||[]){

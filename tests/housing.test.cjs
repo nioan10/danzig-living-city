@@ -21,8 +21,8 @@ test('при отсутствии жилья сохраняется желани
  Housing.review(s);assert.equal(s.person(1).housingWish.to,null);assert.equal(s.housing.moves,0);assert.equal(s.person(1).homeId,'h0');
 });
 test('переезд сохраняет семью, товары и деньги; люди и вещи проходят по дорогам',()=>{
- const s=crowded(),p=s.person(1);Housing.review(s);const goods=s.goods,cash=s.living.reduce((n,p)=>n+p.coins,0)+s.treasury,group=Housing.family(s,p),positions=group.map(p=>[p.x,p.y]);
- assert.ok(Housing.relocate(s,p,'h1','h0').ok);assert.ok(group.every(p=>p.homeId==='h1'&&p.relocation&&p.path.length));assert.deepEqual(group.map(p=>[p.x,p.y]),positions);assert.deepEqual(s.goods,goods);assert.equal(s.living.reduce((n,p)=>n+p.coins,0)+s.treasury,cash);assert.equal(s.person(5).homeId,'h0');assert.equal(Housing.census(s).get('h0').penalty,0);
+ const s=crowded(),p=s.person(1);Housing.review(s);const goods=s.goods,cash=s.living.reduce((n,p)=>n+p.coins,0)+s.treasury+s.properties.escrow,group=Housing.family(s,p),positions=group.map(p=>[p.x,p.y]);
+ assert.ok(Housing.relocate(s,p,'h1','h0').ok);assert.ok(group.every(p=>p.homeId==='h1'&&p.relocation&&p.path.length));assert.deepEqual(group.map(p=>[p.x,p.y]),positions);assert.deepEqual(s.goods,goods);assert.equal(s.living.reduce((n,p)=>n+p.coins,0)+s.treasury+s.properties.escrow,cash);assert.equal(s.person(5).homeId,'h0');assert.equal(Housing.census(s).get('h0').penalty,0);
  for(let i=0;i<60;i++)for(const q of group)if(q.relocation)Housing.travelStep(s,q,5);
  assert.ok(group.every(p=>p.location==='h1'&&!p.relocation));assert.deepEqual(s.goods,goods);assert.equal(s.housing.moves,1);
 });
@@ -66,8 +66,8 @@ test('критическая теснота заставляет большую 
  const s=crisis(),p=s.person(1);comfortable(p);s.minute=600;p.lastRelocation=s.day;p.estate='noble';p.coins=800;p.mind.personality.ambition=1;
  Housing.review(s);assert.equal(p.housingWish.to,'h1');assert.match(p.housingWish.reason,/Критическая/);assert.equal(Housing.family(s,p).length,8);
  assert.equal(Brain.choose(s,p).goal,'relocate');for(const key of ['hunger','energy','health']){p[key]=1;assert.notEqual(Brain.choose(s,p).goal,'relocate',key);p[key]=100;}
- const goods=s.goods,money=s.people.reduce((n,p)=>n+p.coins,0),positions=Housing.family(s,p).map(q=>[q.x,q.y]);assert.ok(Housing.relocate(s,p,'h1','h0').ok);
- assert.equal(Housing.census(s).get('h1').present,8);assert.equal(Housing.census(s).get('h1').penalty,6);assert.deepEqual(Housing.family(s,p).map(q=>[q.x,q.y]),positions);assert.ok(p.path.length);assert.deepEqual(s.goods,goods);assert.equal(s.people.reduce((n,p)=>n+p.coins,0),money);
+ const goods=s.goods,money=s.people.reduce((n,p)=>n+p.coins,0)+s.properties.escrow,positions=Housing.family(s,p).map(q=>[q.x,q.y]);assert.ok(Housing.relocate(s,p,'h1','h0').ok);
+ assert.equal(Housing.census(s).get('h1').present,8);assert.equal(Housing.census(s).get('h1').penalty,6);assert.deepEqual(Housing.family(s,p).map(q=>[q.x,q.y]),positions);assert.ok(p.path.length);assert.deepEqual(s.goods,goods);assert.equal(s.people.reduce((n,p)=>n+p.coins,0)+s.properties.escrow,money);
  for(let n=0;n<90;n++)for(const q of Housing.family(s,p))if(q.relocation)Housing.travelStep(s,q,5);assert.ok(Housing.family(s,p).every(q=>!q.relocation&&q.location==='h1'));assert.deepEqual(s.goods,goods);
 });
 

@@ -1,5 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {Simulation,Civic:C,Brain,Finance,Households:H}=require('../sim.js');
+const {Simulation,Civic:C,Court,Brain,Finance,Households:H}=require('../sim.js');
+const {at,hearing,enforce}=require('./helpers/court.cjs');
 const clone=s=>Simulation.fromJSON(JSON.parse(JSON.stringify(s))),total=s=>s.treasury+s.people.reduce((n,p)=>n+p.coins,0)+s.buildings.reduce((n,b)=>n+b.cash,0),close=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
 function meet(){const s=new Simulation(),p=s.person(1),q=s.person(5);for(const x of [p,q]){Object.assign(x,{age:30,hunger:80,energy:90,health:90,social:40,mood:70,path:[],location:'market',goal:'market',navNode:'b:market',coins:200});}Object.assign(p.mind.personality,{ambition:.95,empathy:.1,caution:.1});return{s,p,q};}
 const crime=q=>({kind:'civicOffence',target:'market',personId:q.id,offence:'theft',motive:'greed',elapsed:0,duration:10});
@@ -15,11 +16,11 @@ test('нужда отличается от корысти и не выводит
 test('вражда и вспыльчивость мотивируют драку; здоровье и связи ухудшаются без создания денег',()=>{
  const{s,p,q}=meet();p.traits=['Вспыльчивый'];p.relationships[q.id]=-60;p.mood=25;const before=total(s),health=q.health;assert.equal(C.motive(s,p,q).kind,'brawl');assert.ok(C.execute(s,p,{...crime(q),offence:'brawl',motive:'revenge'}).ok);close(total(s),before);assert.ok(q.health<health);assert.ok(q.relationships[p.id]<0);assert.equal(s.civic.totals.brawls,1);
 });
-test('раскрытое дело взыскивается однократно, штраф поступает казне, наказание влияет на обучение',()=>{
- const{s,p,q}=meet();s.random=()=>0;C.execute(s,p,crime(q));const before=total(s),treasury=s.treasury,c=s.civic.cases[0];assert.ok(C.sentence(s,c));assert.ok(!C.sentence(s,c));close(total(s),before);close(s.treasury-treasury,8);close(c.recovered,c.amount);assert.equal(p.civic.service,90);assert.ok(p.learning.values.civicOffence.value<0);assert.equal(C.execute(s,p,{kind:'civicService',target:'hall'}).ok,false);p.location='hall';assert.ok(C.execute(s,p,{kind:'civicService',target:'hall'}).ok);assert.equal(p.civic.service,0);assert.deepEqual(clone(s).civic,s.civic);
+test('решение суда взыскивается однократно, штраф поступает казне, наказание влияет на обучение',()=>{
+ const{s,p,q}=meet();s.random=()=>0;at(s,s.person(9),'market');C.execute(s,p,crime(q));const before=total(s),treasury=s.treasury,c=s.civic.cases[0],docket=Court.fromCrime(s,c);hearing(s,docket);assert.ok(enforce(s,docket).ok);assert.ok(!enforce(s,docket).ok);close(total(s),before);close(s.treasury-treasury,8);close(c.recovered,c.amount);assert.ok(p.learning.values.civicOffence.value<0);assert.deepEqual(clone(s).civic,s.civic);
 });
 test('бедный нарушитель не уходит в минус: неоплаченный штраф ждёт дохода',()=>{
- const{s,p,q}=meet();s.random=()=>0;C.execute(s,p,crime(q));p.coins=12;C.sentence(s,s.civic.cases[0]);assert.equal(p.coins,12);assert.equal(p.civic.fineDue,8);p.coins=80;s.day++;const before=total(s);C.daily(s);assert.equal(p.civic.fineDue,6);close(total(s),before);const snapshot=JSON.stringify(s.civic);C.daily(s);assert.equal(JSON.stringify(s.civic),snapshot);
+ const{s,p,q}=meet();s.random=()=>0;at(s,s.person(9),'market');C.execute(s,p,crime(q));p.coins=12;const c=Court.fromCrime(s,s.civic.cases[0]);hearing(s,c);enforce(s,c);assert.equal(p.coins,12);assert.equal(c.verdict.fine-c.finesPaid,8);p.coins=80;s.day+=2;const before=total(s);enforce(s,c);assert.equal(c.verdict.fine-c.finesPaid,0);close(total(s),before);const snapshot=JSON.stringify(s.civic);enforce(s,c);assert.equal(JSON.stringify(s.civic),snapshot);
 });
 test('помощь и наставничество требуют встречи и меняют реальные деньги или умение',()=>{
  const{s,p,q}=meet();p.mind.personality.empathy=.9;q.coins=2;const before=total(s);C.encounter(s,p,q);close(total(s),before);assert.ok(q.coins>2);assert.ok(s.civic.totals.aid>0);

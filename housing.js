@@ -7,7 +7,7 @@
   function ensure(s){R.ensure(s);s.housing??={moves:0,history:[]};s.housing.land??={sinceDay:s.day,lastDay:s.day,paid:0,relief:0,days:[]};for(const p of s.people)p.estate??=s.person(p.parents?.[0])?.estate||district(s.building(p.homeId)).estate;return s.housing;}
   function rent(s,p,b=s.building(p.homeId)){return p.age<16||p.absence||!b||b.construction||b.damaged||b.closedUntil>s.now?0:district(b).rent*R.spec(b).rent*(1+((b.development?.level||1)-1)*.25);}
   function collectRent(s){const v=ensure(s).land;if(v.lastDay>=s.day)return;v.lastDay=s.day;let paid=0,relief=0;for(const p of s.alive){const due=rent(s,p),actual=Math.min(due,Math.max(0,p.coins-12));p.coins-=actual;paid+=actual;relief+=due-actual;p.landRent={day:s.day,due,paid:actual,relief:due-actual};if(actual)s.recordHousingExpense?.(p,actual);}if(paid)s.changeTreasury(paid,'landRent');v.paid+=paid;v.relief+=relief;v.days.push({day:s.day,paid,relief});v.days=v.days.slice(-60);}
-  function affordable(s,p,group,b){return R.eligible(b,group)&&(district(b).estate!=='noble'||['noble','patrician'].includes(p.estate)||p.reputation>=60&&group.reduce((n,q)=>n+q.coins,0)>=300);}
+  function affordable(s,p,group,b){return (s.propertyAccess?.(p,group,b)??true)&&R.eligible(b,group)&&(district(b).estate!=='noble'||['noble','patrician'].includes(p.estate)||p.reputation>=60&&group.reduce((n,q)=>n+q.coins,0)>=300);}
   const room=b=>b?.type==='home'&&!b.construction?R.spec(b).capacity+((b.development?.level||1)-1)*3+(b.development?.extras.includes(3)?2:0):0;
   // Capacity is a comfort target. Above 150% the cost grows quadratically.
   function pressure(present,capacity){const ratio=capacity>0?present/capacity:0,excess=Math.max(0,ratio-1),penalty=Math.min(100,Math.round(18*excess+24*Math.max(0,excess-.5)**2));return {ratio,penalty,restFactor:Math.max(.35,1-penalty*.0065),severity:ratio>2?'Критическая теснота':ratio>5/3?'Сильная теснота':ratio>1?'Теснота':'Места достаточно'};}
@@ -43,6 +43,7 @@
   function relocate(s,p,target,from){
     const rows=census(s),old=rows.get(p.homeId),dest=rows.get(target),group=family(s,p);
     if(from!==p.homeId||!old||(!old.penalty&&!(p.housingWish?.prestige&&p.housingWish?.to===target)&&!(p.housingWish?.to===target&&group.filter(q=>q.age>=16).every(q=>q.coins<24)&&district(dest?.b).rent<district(old.b).rent))||!dest||!affordable(s,p,group,dest.b)||target===p.homeId||!s.isOpen(dest.b)||!available(group)||(dest.capacity-dest.members.length<group.length&&!relief(old,dest,group.length,dest.members.length))){p.housingWish=null;return {ok:false,message:'Условия изменились: свободного места для всей семьи больше нет или переезд пока невозможен.'};}
+    if(s.propertyAccess&&!s.propertyAccess(p,group,dest.b,true))return {ok:false,message:'Не удалось заключить договор аренды.'};
     const share=group.length/old.members.length;
     // Household goods remain in the simulation and travel in personal bags.
     for(const[g,stock]of Object.entries(old.b.stock)){const amount=Math.floor(stock*share);old.b.stock[g]-=amount;group[0].bag[g]=(group[0].bag[g]||0)+amount;}

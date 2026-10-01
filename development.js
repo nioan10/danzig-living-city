@@ -23,12 +23,13 @@
   }
   function owner(s,b){
     if(publicTypes.includes(b.type))return s.governmentOfficer?.(b.type==='dock'?'port':'mayor')||s.person(s.mayorId);
+    if(b.type==='home'&&s.properties)return s.propertyOwner(b);
     const g=s.guilds?.groups.find(g=>g.id===b.guildId);if(g)return s.person(g.leaderId);
     return s.person(b.ownerId);
   }
   function inheritance(s){
     for(const b of s.buildings){
-      if(publicTypes.includes(b.type)||b.guildId||b.construction)continue;
+      if(publicTypes.includes(b.type)||b.guildId||b.construction||b.type==='home'&&s.properties)continue;
       const old=s.person(b.ownerId);if(old?.alive&&(b.type!=='home'||old.homeId===b.id))continue;
       const candidates=s.living.filter(p=>p.age>=18&&(b.type==='home'?p.homeId===b.id:p.jobId===b.id));
       candidates.sort((a,b)=>Number(b.parents.includes(old?.id))-Number(a.parents.includes(old?.id))||b.age-a.age||a.id-b.id);

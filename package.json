@@ -1,6 +1,6 @@
 {
   "name": "danzig-living-city",
-  "version": "0.19.0",
+  "version": "0.21.0",
   "private": true,
   "description": "Наблюдаемая симуляция средневекового города без зависимостей",
   "engines": {
