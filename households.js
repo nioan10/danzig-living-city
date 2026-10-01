@@ -42,11 +42,11 @@
     // Income is an expectation, never credited to the wallet. Existing supplies reduce the cash target.
     const incomeCredit=Math.min(foodExpense*1.25,expectedIncome*risk);
     const reserve=Math.max(0,foodExpense*Math.max(0,horizon-foodDays)+Math.max(0,fuel*2-fuelStock)*(s.commerce?.prices.wood||.3)-incomeCredit);
-    const spendingFloor=reserve*(1-risk*.45),free=Math.max(0,coins-spendingFloor),limit=Math.min(free,coins*(.15+(1-traits.thrift)*.2+risk*.15));
+    const housingReserve=s.housingSavings?.(members)||0,spendingFloor=reserve*(1-risk*.45),free=Math.max(0,coins-spendingFloor),limit=Math.min(Math.max(0,free-housingReserve),coins*(.15+(1-traits.thrift)*.2+risk*.15));
     const lowestHunger=Math.min(100,...members.map(q=>q.hunger)),canShop=lowestHunger>=(dependents?45:30)&&(foodDays>=.7||risk>.55&&expectedIncome>=foodExpense&&lowestHunger>55);
     const days=history?members.flatMap(q=>person(q).days.filter(d=>d.day>=s.day-6)):[],received=sum(days.map(d=>d.income)),spent={};
     for(const d of days)for(const [good,value]of Object.entries(d.spending))spent[good]=(spent[good]||0)+value;
-    return {id:head.id,members,adults,home,coins,food,dailyFood,foodDays,foodExpense,fuel,fuelExpense,replacement,expense:foodExpense+fuelExpense+replacement+(s.propertyRent?.(head)||0)+sum(adults.map(q=>s.housingExpense?.(q)||0)),reserve,spendingFloor,free,limit,received,spent,traits,risk,horizon,expectedIncome,dependents,stress,canShop,
+    return {id:head.id,members,adults,home,coins,food,dailyFood,foodDays,foodExpense,fuel,fuelExpense,replacement,housingReserve,expense:foodExpense+fuelExpense+replacement+(s.propertyRent?.(head)||0)+sum(adults.map(q=>s.housingExpense?.(q)||0)),reserve,spendingFloor,free,limit,received,spent,traits,risk,horizon,expectedIncome,dependents,stress,canShop,
       pottery:sum(members.map(q=>person(q).pottery)),furniture:sum(members.map(q=>person(q).furniture)),fuelStock,
       shopping:members.some(q=>person(q).lastShop===s.day),pending:members.find(q=>q.householdParcel)};
   }
@@ -61,7 +61,7 @@
     add('furniture',Math.max(0,Math.ceil(b.members.length*.35-b.furniture-.1)),25+(v.ambition??.5)*15,'Обстановка дома для семьи');
     return result.filter(x=>x.amount>0).sort((a,b)=>b.priority-a.priority);
   }
-  function allowance(b,need){return need.good==='food'?b.coins:need.good==='clothes'&&need.priority>70?b.free:b.limit;}
+  function allowance(b,need){return need.good==='food'?b.coins:(need.good==='wood'||need.good==='clothes'&&need.priority>70)?b.free:b.limit;}
   function explanation(b,cost=0){return b.coins-cost<b.reserve?`Готовы уменьшить желаемый запас ради покупки; ожидаемый доход ${b.expectedIncome.toFixed(1)} тал./день не гарантирован.`:`Желаемый запас на ${b.horizon.toFixed(1)} дня учитывает еду дома, осторожность и бережливость семьи.`;}
   function investment(s,p,building){
     const b=budget(s,p),v=p.mind?.personality||b.traits,r=s.productionRecipe(building),margin=r?s.commerce.prices[r.out]*r.amount-Object.entries(r.inputs).reduce((n,[g,a])=>n+s.commerce.prices[g]*a,0)-building.wage*r.time/60:0;
@@ -69,7 +69,7 @@
     const risk=clamp((1-(v.caution??.5))*.65+(v.ambition??.5)*.35-(v.thrift??.5)*.25-b.stress*.5);
     const days=evidence?Math.min(b.dependents?.5:2,Math.max(0,risk-.35)*3):0;
     const floor=Math.max(0,b.reserve-b.foodExpense*days),safe=p.age>=16&&!p.absence&&p.health>=50&&b.members.every(q=>q.hunger>=(q.age<16?45:30));
-    const amount=safe?Math.min(p.coins,Math.max(0,b.coins-floor)):0;
+    const amount=safe?Math.min(p.coins,Math.max(0,b.coins-floor-b.housingReserve)):0;
     return {amount,reserve:b.reserve,riskDays:days,reason:days>0?`Готов рискнуть запасом питания на ${days.toFixed(1)} дня: у двора были продажи и есть расчётная маржа. Возврат не гарантирован.`:'Сохраняю желаемый семейный запас; оснований рисковать им пока нет.'};
   }
   function foodMoney(s,p){return p.age<16||p.absence?p.coins:budget(s,p).coins;}
@@ -154,7 +154,7 @@
     if(p.householdParcel){const home=s.building(p.homeId),parcel=p.householdParcel,n=Math.min(parcel.amount,p.bag[parcel.good]||0);home.stock[parcel.good]+=n;p.bag[parcel.good]=Math.max(0,(p.bag[parcel.good]||0)-n);p.householdParcel=null;}invalidate(s);
   }
   function load(s){
-    const h=ensure(s),valid=n=>Number.isFinite(n)&&n>=0,map=(o,keys)=>o&&Object.entries(o).every(([k,n])=>keys.includes(k)&&valid(n)),days=list=>Array.isArray(list)&&list.length<=30&&list.every((d,i)=>valid(d.day)&&d.day<=s.day&&(!i||d.day>list[i-1].day)&&valid(d.income)&&map(d.spending,[...GOODS,'landRent','titleFee','rent','propertyMaintenance'])&&map(d.bought,GOODS)&&(!d.wanted||map(d.wanted,Object.keys(LABELS)))&&(!d.funded||map(d.funded,Object.keys(LABELS))));
+    const h=ensure(s),valid=n=>Number.isFinite(n)&&n>=0,map=(o,keys)=>o&&Object.entries(o).every(([k,n])=>keys.includes(k)&&valid(n)),days=list=>Array.isArray(list)&&list.length<=30&&list.every((d,i)=>valid(d.day)&&d.day<=s.day&&(!i||d.day>list[i-1].day)&&valid(d.income)&&map(d.spending,[...GOODS,'landRent','titleFee','rent','propertyMaintenance','homeConstruction'])&&map(d.bought,GOODS)&&(!d.wanted||map(d.wanted,Object.keys(LABELS)))&&(!d.funded||map(d.funded,Object.keys(LABELS))));
     if(h.version!==1||!valid(h.sinceDay)||h.sinceDay>s.day||!valid(h.lastDay)||h.lastDay>s.day||!days(h.days)||!Array.isArray(h.purchases)||h.purchases.length>40||h.purchases.some(r=>!valid(r.at)||r.at>s.now||!s.person(r.personId)||!s.building(r.homeId)||!s.building(r.sellerId)||!GOODS.includes(r.good)||!valid(r.amount)||!valid(r.cost)))throw Error('Некорректная семейная экономика');
     for(const p of s.people){const d=person(p),q=p.householdParcel;if(!['pottery','furniture','warmth','foodStress'].every(k=>valid(d[k]))||d.foodStress>1||d.warmth>100||!Number.isInteger(d.lastShop)||d.lastShop< -1||d.lastShop>s.day||!days(d.days)||q&&(!['wood','clothes','pottery','furniture'].includes(q.good)||!valid(q.amount)||q.amount<=0||q.amount>(p.bag[q.good]||0)+1e-8||q.recipient!==null&&!s.person(q.recipient)||!s.person(q.ownerId)))throw Error('Некорректное имущество семьи');}
     for(const p of s.people)for(const x of p.plan?.steps||[]){
